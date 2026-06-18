@@ -1,0 +1,72 @@
+TARGET = NamPlatform
+
+LIBDAISY_DIR  = third_party/libDaisy
+DAISYSP_DIR   = third_party/DaisySP
+SYSTEM_FILES_DIR = $(LIBDAISY_DIR)/core
+
+# --- project sources --------------------------------------------------------
+CPP_SOURCES = \
+  main.cpp \
+  NamEmbeddedStubs.cpp \
+  QspiStorage.cpp \
+  AudioEngine.cpp \
+  IRLoader.cpp \
+  ModelManager.cpp \
+  PresetManager.cpp \
+  Controls.cpp \
+  Ui.cpp \
+  display/st7789_driver.cpp \
+  display/display_renderer.cpp \
+  nam-binary-loader/namb/get_dsp_namb.cpp \
+  NeuralAmpModelerCore/NAM/activations.cpp \
+  NeuralAmpModelerCore/NAM/conv1d.cpp \
+  NeuralAmpModelerCore/NAM/convnet.cpp \
+  NeuralAmpModelerCore/NAM/dsp.cpp \
+  NeuralAmpModelerCore/NAM/linear.cpp \
+  NeuralAmpModelerCore/NAM/lstm.cpp \
+  NeuralAmpModelerCore/NAM/ring_buffer.cpp \
+  NeuralAmpModelerCore/NAM/util.cpp \
+  NeuralAmpModelerCore/NAM/wavenet/model.cpp \
+  NeuralAmpModelerCore/NAM/wavenet/a2_fast.cpp
+
+# display stack from the user's other project (copy or symlink ./display/)
+# Uncomment when you drop the files in:
+# CPP_SOURCES += display/st7789_driver.cpp display/display_manager.cpp \
+#                display/display_renderer.cpp
+
+C_INCLUDES = \
+  -I. \
+  -Idisplay \
+  -INeuralAmpModelerCore \
+  -INeuralAmpModelerCore/Dependencies/eigen \
+  -INeuralAmpModelerCore/Dependencies/nlohmann \
+  -Inam-binary-loader
+
+# --- build config -----------------------------------------------------------
+# BOOT_QSPI is mandatory: the app is ~600 KB of code, which exceeds the
+# STM32H750's 128 KB internal flash. Models/IRs live in the same QSPI chip
+# at 0x90200000 (see data_format.h). DO NOT change this to BOOT_SRAM.
+APP_TYPE = BOOT_QSPI
+
+CPP_STANDARD = -std=gnu++17
+OPT = -O3
+LDFLAGS = -u _printf_float
+
+# No SD card, no FatFS.
+# USE_FATFS = 1   <-- intentionally omitted
+
+C_DEFS = \
+  -DNAM_SAMPLE_FLOAT \
+  -DNAM_USE_INLINE_GEMM \
+  -D__ARM_ARCH_7EM__ \
+  -DUSE_ARM_DSP
+
+C_SOURCES += \
+  $(LIBDAISY_DIR)/Drivers/CMSIS-DSP/Source/FilteringFunctions/arm_fir_f32.c \
+  $(LIBDAISY_DIR)/Drivers/CMSIS-DSP/Source/FilteringFunctions/arm_fir_init_f32.c
+
+# Pull in the libDaisy master build rules (also picks up DAISYSP_DIR).
+include $(SYSTEM_FILES_DIR)/Makefile
+
+CPPFLAGS += -fexceptions -ffast-math -funroll-loops -ftree-vectorize \
+            -fmove-loop-invariants

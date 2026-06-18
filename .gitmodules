@@ -1,0 +1,12 @@
+[submodule "third_party/libDaisy"]
+	path = third_party/libDaisy
+	url = https://github.com/electro-smith/libDaisy.git
+[submodule "third_party/DaisySP"]
+	path = third_party/DaisySP
+	url = https://github.com/electro-smith/DaisySP.git
+[submodule "nam-binary-loader"]
+	path = nam-binary-loader
+	url = https://github.com/tone-3000/nam-binary-loader.git
+[submodule "NeuralAmpModelerCore"]
+	path = NeuralAmpModelerCore
+	url = https://github.com/sdatkinson/NeuralAmpModelerCore.git
