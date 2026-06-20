@@ -13,14 +13,20 @@ QspiStorage::Status QspiStorage::Init()
     // Pin config is set to Daisy Seed defaults by the struct initialiser;
     // the hardware pins are fixed on the Daisy Seed PCB.
 
-    if(qspi_.Init(cfg) != QSPIHandle::Result::OK)
-    {
-        status_ = Status::BAD_MAGIC; // reuse as "peripheral failed"
-        return status_;
-    }
+    // When APP_TYPE=BOOT_QSPI, libDaisy's Init() always returns ERR (its
+    // CheckProgramMemory guard refuses to re-init while executing from QSPI).
+    // DaisyBoot already left QSPI in memory-mapped mode, so Init() is not
+    // needed — GetData() is pure pointer arithmetic and works regardless.
+    qspi_.Init(cfg);
 
     header_ = reinterpret_cast<const NamDataHeader*>(
         reinterpret_cast<uintptr_t>(qspi_.GetData(hw::QSPI_DATA_PARTITION_OFFSET)));
+
+    if(!header_)
+    {
+        status_ = Status::BAD_MAGIC;
+        return status_;
+    }
 
     if(header_->magic != NAM_DATA_MAGIC)
     {
