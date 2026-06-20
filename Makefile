@@ -70,3 +70,11 @@ include $(SYSTEM_FILES_DIR)/Makefile
 
 CPPFLAGS += -fexceptions -ffast-math -funroll-loops -ftree-vectorize \
             -fmove-loop-invariants
+
+# ---------------------------------------------------------------------------
+# Data image — pack default models, IRs, and presets into a QSPI flash image.
+# Flash it with:  ./tools/flash_data.sh data_image.bin
+# ---------------------------------------------------------------------------
+.PHONY: data-image
+data-image:
+	python3 tools/build_data_image.py data/ -o data_image.bin

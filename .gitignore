@@ -1,3 +1,5 @@
 /third_party/
 /build/
+/nam-binary-loader/build/
 .idea
+data_image.bin
