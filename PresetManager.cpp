@@ -28,6 +28,7 @@ void PresetManager::Init(QspiStorage& storage, ModelManager& models)
         memcpy(&presets_[count_], blob, n);
         strncpy(names_[count_], e->name, NAM_DATA_NAME_LEN - 1);
         names_[count_][NAM_DATA_NAME_LEN - 1] = '\0';
+        entries_[count_] = e;
         count_++;
     }
 
