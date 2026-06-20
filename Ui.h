@@ -29,9 +29,14 @@ public:
         const char* preset_name;   // current preset display name
         const char* model_name;    // current amp capture name
         const char* ir_name;       // current IR name (or "Off")
-        float       input_gain;    // [0,2] — drives the input bar
-        float       output_vol;    // [0,1] — drives the output bar
+        float       input_gain;    // [0,2] — Gain meter (unipolar)
+        float       output_vol;    // [0,1] — Vol meter (unipolar)
+        float       eq_bass;       // dB, shown on Bass meter (bipolar ±12 dB)
+        float       eq_mid;        // dB, shown on Mid meter (bipolar ±12 dB)
+        float       eq_treble;     // dB, shown on Treble meter (bipolar ±12 dB)
         bool        bypass;        // true = bypass pill shown
+        bool        dirty;         // true = unsaved edits → shows "● EDITED"
+        bool        overload;      // true = audio callback over budget (warning)
         uint8_t     preset_idx;    // shown as "01" etc.
         uint8_t     preset_count;
     };
@@ -67,7 +72,12 @@ public:
         uint8_t            ir_total;     // includes "Off" entry
         uint8_t            ir_idx;       // 0 = Off
 
-        uint8_t  field;    // 0=MODEL 1=CAB 2=IN_GAIN 3=OUT_VOL 4=BYPASS
+        // EQ frequency fields (editable in Edit screen, fields 5-7)
+        float    eq_bass_freq;    // Hz
+        float    eq_mid_freq;     // Hz
+        float    eq_treble_freq;  // Hz
+
+        uint8_t  field;    // 0=MODEL 1=CAB 2=IN_GAIN 3=OUT_VOL 4=BYPASS 5=BASS_FREQ 6=MID_FREQ 7=TRB_FREQ
         bool     editing;  // true = value-edit mode; false = field-navigation mode
     };
 
@@ -79,6 +89,9 @@ public:
 
     // Call every main-loop iteration.
     void Update();
+
+    // True while a DMA frame transfer is in flight.
+    bool IsBusy() const { return driver_.IsBusy(); }
 
 private:
     static constexpr uint32_t kFps        = 30;

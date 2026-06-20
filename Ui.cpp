@@ -107,68 +107,81 @@ void Ui::Update()
 
 void Ui::RenderPerformance()
 {
-    DisplayRenderer::Clear(kColorBlack);
+    using DR = DisplayRenderer;
+    DR::Clear(kColorBlack);
 
-    // --- Header: preset index + bypass pill ---------------------------------
-    char idx_buf[16];
-    snprintf(idx_buf, sizeof(idx_buf), "%02u / %02u",
+    // --- Channel strip layout constants -------------------------------------
+    constexpr uint16_t kMW    = 32;   // meter width
+    constexpr uint16_t kMGap  =  6;   // gap between meters
+    constexpr uint16_t kMX0   = 28;   // left edge of first meter (centres 5 bars in 240px)
+    constexpr uint16_t kMY    = 70;   // meter top
+    constexpr uint16_t kMH    = 182;  // meter height
+    constexpr uint16_t kEqMax = 12;   // ±12 dB full-scale for EQ
+
+    // --- Header: index + dirty + bypass pill --------------------------------
+    char idx_buf[8];
+    snprintf(idx_buf, sizeof(idx_buf), "%02u/%02u",
              (unsigned)(perf_.preset_idx + 1), (unsigned)perf_.preset_count);
-    DisplayRenderer::DrawText(kMargin, kRowHeader, idx_buf,
-                              kColorDim, kColorBlack, Font_7x10);
+    DR::DrawText(kMargin, kRowHeader, idx_buf, kColorDim, kColorBlack, Font_7x10);
 
-    // Bypass pill (right-aligned, 50px wide)
+    if (perf_.dirty)
+        DR::DrawText(56, kRowHeader, "* EDITED", kColorYellow, kColorBlack, Font_7x10);
+
     const uint16_t pill_x = 240 - 56;
     const uint16_t pill_c = perf_.bypass ? kColorRed : kColorGreen;
-    DisplayRenderer::FillRect(pill_x, kRowHeader, 50, 12, pill_c);
-    DisplayRenderer::DrawText(pill_x + 4, kRowHeader + 1,
-                              perf_.bypass ? "BYPASS" : "ACTIVE",
-                              kColorBlack, pill_c, Font_7x10);
+    DR::FillRect(pill_x, kRowHeader, 50, 12, pill_c);
+    DR::DrawText(pill_x + 4, kRowHeader + 1,
+                 perf_.bypass ? "BYPASS" : "ACTIVE",
+                 kColorBlack, pill_c, Font_7x10);
 
-    // --- Preset name box (Font_16x26) ---------------------------------------
-    DisplayRenderer::FillRect(kMargin, kRowPresetBox,
-                              240 - 2 * kMargin, 36, 0x1082 /* dark grey */);
-
-    // Centre the name text (16px wide chars)
+    // --- Preset name (2× scaled, centred) -----------------------------------
     const char* pname = perf_.preset_name ? perf_.preset_name : "---";
-    size_t len = 0;
-    while (pname[len]) len++;
-    uint16_t txt_w = static_cast<uint16_t>(len * Font_16x26.FontWidth);
-    uint16_t txt_x = (txt_w < 228) ? static_cast<uint16_t>((228 - txt_w) / 2 + kMargin) : kMargin;
-    DisplayRenderer::DrawText(txt_x, kRowPresetTxt, pname,
-                              kColorWhite, 0x1082, Font_16x26);
+    size_t len = 0; while (pname[len]) len++;
+    uint16_t nm_w  = static_cast<uint16_t>(len * Font_7x10.FontWidth * 2u);
+    uint16_t nm_x  = (nm_w < 240u) ? static_cast<uint16_t>((240u - nm_w) / 2u) : 0u;
+    DR::DrawTextScaled(nm_x, 20, pname, kColorWhite, kColorBlack, Font_7x10, 2);
 
-    // --- AMP section --------------------------------------------------------
-    DisplayRenderer::DrawText(kMargin, kRowAmpLbl, "AMP",
-                              kColorDim, kColorBlack, Font_7x10);
-    DisplayRenderer::DrawText(kMargin, kRowAmpName,
-                              perf_.model_name ? perf_.model_name : "---",
-                              kColorWhite, kColorBlack, Font_7x10);
+    // --- AMP / CAB labels ---------------------------------------------------
+    char amp_buf[NAM_DATA_NAME_LEN + 8];
+    snprintf(amp_buf, sizeof(amp_buf), "AMP %s",
+             perf_.model_name ? perf_.model_name : "---");
+    DR::DrawText(kMargin, 42, amp_buf, kColorDim, kColorBlack, Font_7x10);
 
-    // --- CAB section --------------------------------------------------------
-    DisplayRenderer::DrawText(kMargin, kRowIrLbl, "CAB",
-                              kColorDim, kColorBlack, Font_7x10);
-    DisplayRenderer::DrawText(kMargin, kRowIrName,
-                              perf_.ir_name ? perf_.ir_name : "Off",
-                              kColorWhite, kColorBlack, Font_7x10);
+    char cab_buf[NAM_DATA_NAME_LEN + 8];
+    snprintf(cab_buf, sizeof(cab_buf), "CAB %s",
+             perf_.ir_name ? perf_.ir_name : "Off");
+    DR::DrawText(kMargin, 54, cab_buf, kColorDim, kColorBlack, Font_7x10);
 
-    // --- Separator ----------------------------------------------------------
-    DisplayRenderer::HLine(kMargin, kRowSep1, 240 - 2 * kMargin, kColorDim);
+    // Separator
+    DR::HLine(0, 66, 240, kColorDim);
 
-    // --- Level bars ---------------------------------------------------------
-    DisplayRenderer::DrawText(kMargin, kRowInLbl + 2, "IN ",
-                              kColorDim, kColorBlack, Font_7x10);
-    DisplayRenderer::DrawBar(kBarX, kRowInBar, kBarW, kBarH,
-                             perf_.input_gain, kColorCyan);
+    // --- 5 vertical meters --------------------------------------------------
+    struct MeterDef { float val; bool bipolar; uint16_t color; const char* lbl; };
+    MeterDef meters[5] = {
+        { perf_.input_gain / 2.0f,              false, kColorCyan,   "GAIN" },
+        { perf_.eq_bass    / (float)kEqMax,     true,  kColorGreen,  "BASS" },
+        { perf_.eq_mid     / (float)kEqMax,     true,  kColorGreen,  "MID"  },
+        { perf_.eq_treble  / (float)kEqMax,     true,  kColorGreen,  "TRE"  },
+        { perf_.output_vol,                     false, kColorCyan,   "VOL"  },
+    };
 
-    DisplayRenderer::DrawText(kMargin, kRowOutLbl + 2, "OUT",
-                              kColorDim, kColorBlack, Font_7x10);
-    DisplayRenderer::DrawBar(kBarX, kRowOutBar, kBarW, kBarH,
-                             perf_.output_vol, kColorCyan);
+    for (int i = 0; i < 5; ++i) {
+        uint16_t mx = static_cast<uint16_t>(kMX0 + i * (kMW + kMGap));
+        DR::VMeter(mx, kMY, kMW, kMH, meters[i].val, meters[i].bipolar, meters[i].color);
+        // Band label centred below the meter
+        uint16_t lbl_len = 0; while (meters[i].lbl[lbl_len]) lbl_len++;
+        uint16_t lbl_w   = static_cast<uint16_t>(lbl_len * Font_7x10.FontWidth);
+        uint16_t lbl_x   = static_cast<uint16_t>(mx + (kMW - lbl_w) / 2u);
+        DR::DrawText(lbl_x, kMY + kMH + 4u, meters[i].lbl,
+                     meters[i].color, kColorBlack, Font_7x10);
+    }
 
-    // --- Footer hint --------------------------------------------------------
-    DisplayRenderer::DrawText(kMargin, kRowHint,
-                              "FS1: next   FS2: prev",
-                              kColorDim, kColorBlack, Font_7x10);
+    // --- Footer -------------------------------------------------------------
+    if (perf_.overload)
+        DR::DrawText(kMargin, kRowHint, "! AUDIO OVERLOAD", kColorRed, kColorBlack, Font_7x10);
+    else
+        DR::DrawText(kMargin, kRowHint, "FS1:next/SAVE  FS2:prev/RVRT",
+                     kColorDim, kColorBlack, Font_7x10);
 }
 
 // ---------------------------------------------------------------------------
@@ -250,45 +263,44 @@ void Ui::RenderEdit()
                               kColorWhite, kColorBlack, Font_7x10);
     DisplayRenderer::HLine(0, kBrowseSepY, 240, kColorDim);
 
-    // Field definitions: label text, value, Y for label row (value row = label + 12)
-    struct FieldRow { const char* label; uint16_t y; };
-    static constexpr FieldRow kFields[5] = {
-        {"MODEL",   28},
-        {"CAB",     68},
-        {"IN GAIN", 108},
-        {"OUT VOL", 148},
-        {"BYPASS",  188},
+    // 8 fields, 34px pitch starting at Y=22.
+    struct FieldRow { const char* label; };
+    static constexpr FieldRow kFields[8] = {
+        {"MODEL"},
+        {"CAB"},
+        {"IN GAIN"},
+        {"OUT VOL"},
+        {"BYPASS"},
+        {"BASS FREQ"},
+        {"MID FREQ"},
+        {"TRE FREQ"},
     };
-    static constexpr uint16_t kLabelH  = 10;
-    static constexpr uint16_t kValOff  = 12; // value text Y offset below label
-    static constexpr uint16_t kRowSpan = 26; // total height of one field block
-    static constexpr uint16_t kAccentW = 3;
+    static constexpr uint16_t kField0Y  = 22;
+    static constexpr uint16_t kPitch    = 34;
+    static constexpr uint16_t kValOff   = 12;
+    static constexpr uint16_t kRowSpan  = kPitch - 2u;
+    static constexpr uint16_t kAccentW  = 3;
 
-    for (uint8_t f = 0; f < 5; ++f)
+    for (uint8_t f = 0; f < 8; ++f)
     {
-        uint16_t y      = kFields[f].y;
+        uint16_t y      = static_cast<uint16_t>(kField0Y + f * kPitch);
         bool     active = (f == edit_.field);
         bool     edmode = active && edit_.editing;
 
-        // Determine accent color.
-        uint16_t accent = active ? (edmode ? kColorCyan : kColorYellow) : 0;
+        uint16_t accent   = active ? (edmode ? kColorCyan : kColorYellow) : 0u;
 
         if (active)
         {
-            // Row background highlight.
-            DisplayRenderer::FillRect(0, y, 240, kRowSpan, 0x0841 /* v.dark */);
-            // Left accent bar.
+            DisplayRenderer::FillRect(0, y, 240, kRowSpan, 0x0841u);
             DisplayRenderer::FillRect(0, y, kAccentW, kRowSpan, accent);
         }
 
         uint16_t label_fg = active ? accent : kColorDim;
         uint16_t val_fg   = active ? accent : kColorWhite;
 
-        // Label
         DisplayRenderer::DrawText(kAccentW + 4, y, kFields[f].label,
-                                  label_fg, 0x0000, Font_7x10);
+                                  label_fg, 0x0000u, Font_7x10);
 
-        // Value text (built per field)
         char val[32] = {};
         switch (f)
         {
@@ -303,39 +315,35 @@ void Ui::RenderEdit()
         {
             if (edit_.ir_idx == 0 || !edit_.ir_names)
                 strncpy(val, "Off", sizeof(val) - 1);
-            else
-            {
+            else {
                 const char* name = edit_.ir_names[edit_.ir_idx];
                 strncpy(val, name ? name : "Off", sizeof(val) - 1);
             }
             break;
         }
-        case 2: // IN GAIN
-            snprintf(val, sizeof(val), "%.2f", (double)edit_.input_gain);
-            break;
-        case 3: // OUT VOL
-            snprintf(val, sizeof(val), "%.2f", (double)edit_.output_vol);
-            break;
-        case 4: // BYPASS
-            strncpy(val, edit_.bypass ? "ON" : "OFF", sizeof(val) - 1);
-            break;
+        case 2: snprintf(val, sizeof(val), "%.2f", (double)edit_.input_gain); break;
+        case 3: snprintf(val, sizeof(val), "%.2f", (double)edit_.output_vol); break;
+        case 4: strncpy(val, edit_.bypass ? "ON" : "OFF", sizeof(val) - 1); break;
+        case 5: snprintf(val, sizeof(val), "%.0f Hz", (double)edit_.eq_bass_freq);   break;
+        case 6: snprintf(val, sizeof(val), "%.0f Hz", (double)edit_.eq_mid_freq);    break;
+        case 7: snprintf(val, sizeof(val), "%.0f Hz", (double)edit_.eq_treble_freq); break;
         }
 
         uint16_t val_y  = static_cast<uint16_t>(y + kValOff);
-        uint16_t val_bg = 0x0000;
+        uint16_t val_bg = 0x0000u;
 
         if (edmode)
         {
-            // Filled background behind value while editing.
-            DisplayRenderer::FillRect(kAccentW + 4, val_y, 230, kLabelH, 0x1082);
-            val_bg = 0x1082;
+            DisplayRenderer::FillRect(kAccentW + 4, val_y, 230, 10, 0x1082u);
+            val_bg = 0x1082u;
         }
         DisplayRenderer::DrawText(kAccentW + 8, val_y, val, val_fg, val_bg, Font_7x10);
     }
 
     // Footer
-    DisplayRenderer::DrawText(kMargin, kBrowseHintY,
-                              "FS1:apply  FS2:cancel",
+    static constexpr uint16_t kEditHintY = 298;
+    DisplayRenderer::DrawText(kMargin, kEditHintY,
+                              "FS1:save  FS2:revert",
                               kColorDim, kColorBlack, Font_7x10);
 }
 
@@ -345,13 +353,6 @@ void Ui::RenderEdit()
 
 void Ui::PushFrame()
 {
-    // Flush D-cache lines covering the framebuffer before SPI DMA reads them.
-    // SDRAM is configured write-back cacheable (MPU Region 1); without this,
-    // the DMA controller sees stale cache lines instead of the rendered pixels.
-    SCB_CleanDCache_by_Addr(reinterpret_cast<uint32_t*>(DisplayRenderer::FrameBuffer()),
-                          static_cast<int32_t>(DisplayRenderer::FrameBufferBytes()));
-
-    driver_.StartDmaTransfer(DisplayRenderer::FrameBuffer(),
-                             DisplayRenderer::FrameBufferBytes(),
-                             nullptr, nullptr);
+    driver_.PushFrame(DisplayRenderer::FrameBuffer(),
+                      DisplayRenderer::FrameBufferBytes());
 }
