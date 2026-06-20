@@ -30,15 +30,11 @@ if [[ ! -f "$IMAGE" ]]; then
   exit 1
 fi
 
-if ! dfu-util -l 2>/dev/null | grep -q "$DFU_ID"; then
-  echo "error: no DFU device ($DFU_ID) found." >&2
-  echo "Put the Daisy in DFU mode: hold BOOT, tap RESET, release BOOT — then retry." >&2
-  exit 1
-fi
-
 echo "Flashing '$IMAGE' to QSPI data partition @ $TARGET_ADDR ..."
-# -a 0 : the bootloader's flash alt-setting (covers QSPI memory-mapped range)
-# :leave : exit DFU and run the application when done
-dfu-util -a 0 -s "${TARGET_ADDR}:leave" -D "$IMAGE" -d ",${DFU_ID}"
+echo "Waiting for DaisyBoot DFU device — double-tap RESET now..."
+# -w    : wait for device to appear (needed because DaisyBoot's DFU window is ~2 s)
+# -a 0  : the bootloader's flash alt-setting (covers QSPI memory-mapped range)
+# :leave: exit DFU and run the application when done
+dfu-util -w -a 0 -s "${TARGET_ADDR}:leave" -D "$IMAGE" -d ",${DFU_ID}"
 
 echo "Done. The pedal should re-enumerate and boot with the new data."
