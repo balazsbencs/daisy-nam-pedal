@@ -11,6 +11,7 @@ CPP_SOURCES = \
   QspiStorage.cpp \
   AudioEngine.cpp \
   Eq3.cpp \
+  QuadEncoder.cpp \
   IRLoader.cpp \
   ModelManager.cpp \
   PresetManager.cpp \

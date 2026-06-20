@@ -21,7 +21,7 @@ IR_SRCS        = ../IRLoader.cpp
 PRESET_SRCS    = ../PresetManager.cpp
 MODEL_STUB_SRC = stub_impls/ModelManager_stub.cpp
 
-BINARIES = test_data_format test_qspi_storage test_preset_manager test_ir_loader test_eq3 test_audio_engine
+BINARIES = test_data_format test_qspi_storage test_preset_manager test_ir_loader test_eq3 test_audio_engine test_quad_encoder
 
 .PHONY: all run clean
 
@@ -56,6 +56,10 @@ test_eq3: test_eq3.cpp $(EQ_SRCS)
 test_audio_engine: test_audio_engine.cpp $(AUDIO_SRCS)
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
+# Pure quadrature decoder (no Daisy deps)
+test_quad_encoder: test_quad_encoder.cpp ../quad_decode.h
+	$(CXX) $(CXXFLAGS) $< -o $@
+
 run: all
 	@echo "=== TEST-01: data_format ==="
 	./test_data_format
@@ -69,6 +73,8 @@ run: all
 	./test_eq3
 	@echo "=== test_audio_engine ==="
 	./test_audio_engine
+	@echo "=== test_quad_encoder ==="
+	./test_quad_encoder
 	@echo "=== TEST-11: tools (Python) ==="
 	python3 test_tools.py
 
