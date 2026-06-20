@@ -1,0 +1,10 @@
+[
+  {
+    "name": "Marshall",
+    "model": "marshall",
+    "ir": "ir",
+    "input_gain": 1.0,
+    "output_volume": 0.8,
+    "bypass": false
+  }
+]
