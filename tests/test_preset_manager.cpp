@@ -9,6 +9,7 @@
 #include "../ModelManager.h"
 #include "../PresetManager.h"
 #include "../AudioEngine.h"
+#include <cmath>
 #include <cstring>
 
 // Point the QSPI shim at our FakeStorage buffer.
@@ -176,6 +177,35 @@ static void test_apply_unknown_model_forces_bypass()
     CHECK(engine.GetBypass());
 }
 
+static void test_apply_eq_forwarded()
+{
+    // ApplyPreset forwards explicit EQ values to the engine.
+    AudioEngine engine; engine.Init(48, 48000.0f);
+    QspiStorage storage;   // not Init'd; empty model/IR names skip those paths
+    ModelManager models;
+    PresetManager pm;
+    NamPreset p{};
+    p.input_gain = 1.0f; p.output_volume = 0.8f; p.bypass = 0;
+    p.eq_bass_gain = 3.0f; p.eq_mid_gain = -2.0f; p.eq_treble_gain = 1.0f;
+    p.eq_bass_freq = 120.0f; p.eq_mid_freq = 800.0f; p.eq_treble_freq = 3500.0f;
+    pm.ApplyPreset(p, engine, storage, models, 48000.0f, 48);
+    CHECK(std::fabs(engine.GetEqGain(Eq3::Band::Bass) - 3.0f)    < 1e-6f);
+    CHECK(std::fabs(engine.GetEqGain(Eq3::Band::Mid)  - (-2.0f)) < 1e-6f);
+    CHECK(std::fabs(engine.GetEqFreq(Eq3::Band::Mid)  - 800.0f)  < 1e-3f);
+}
+
+static void test_apply_eq_default_freq_fallback()
+{
+    // Zeroed freq (legacy/short blob → memset to 0) falls back to defaults.
+    AudioEngine engine; engine.Init(48, 48000.0f);
+    QspiStorage storage; ModelManager models; PresetManager pm;
+    NamPreset p{};   // all-zero EQ
+    pm.ApplyPreset(p, engine, storage, models, 48000.0f, 48);
+    CHECK(std::fabs(engine.GetEqFreq(Eq3::Band::Bass)   - 100.0f)  < 1e-3f);
+    CHECK(std::fabs(engine.GetEqFreq(Eq3::Band::Mid)    - 750.0f)  < 1e-3f);
+    CHECK(std::fabs(engine.GetEqFreq(Eq3::Band::Treble) - 4000.0f) < 1e-3f);
+}
+
 int main()
 {
     test_no_presets_synthesises_per_model();
@@ -184,5 +214,7 @@ int main()
     test_navigation_wraps();
     test_navigation_no_crash_when_empty();
     test_apply_unknown_model_forces_bypass();
+    test_apply_eq_forwarded();
+    test_apply_eq_default_freq_fallback();
     return test_summary("preset_manager");
 }

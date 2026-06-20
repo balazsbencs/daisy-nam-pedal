@@ -1,5 +1,11 @@
 #include "PresetManager.h"
+#include "Eq3.h"
 #include <cstring>
+
+static constexpr uint32_t NAM_LEGACY_PRESET_SIZE = 74;
+
+// Substitute default frequency when a stored value is absent (zero).
+static inline float eq_freq_or(float stored, float dflt) { return stored > 0.0f ? stored : dflt; }
 
 void PresetManager::Init(QspiStorage& storage, ModelManager& models)
 {
@@ -14,10 +20,12 @@ void PresetManager::Init(QspiStorage& storage, ModelManager& models)
             continue;
 
         const uint8_t* blob = storage.BlobPtr(e);
-        if (!blob || e->length < sizeof(NamPreset))
+        if (!blob || e->length < NAM_LEGACY_PRESET_SIZE)
             continue;
 
-        memcpy(&presets_[count_], blob, sizeof(NamPreset));
+        memset(&presets_[count_], 0, sizeof(NamPreset));
+        size_t n = e->length < sizeof(NamPreset) ? e->length : sizeof(NamPreset);
+        memcpy(&presets_[count_], blob, n);
         strncpy(names_[count_], e->name, NAM_DATA_NAME_LEN - 1);
         names_[count_][NAM_DATA_NAME_LEN - 1] = '\0';
         count_++;
@@ -37,6 +45,8 @@ void PresetManager::Init(QspiStorage& storage, ModelManager& models)
             p.input_gain     = 1.0f;
             p.output_volume  = 0.85f;
             p.bypass         = 0;
+            p.eq_bass_gain = p.eq_mid_gain = p.eq_treble_gain = 0.0f;
+            p.eq_bass_freq = 100.0f; p.eq_mid_freq = 750.0f; p.eq_treble_freq = 4000.0f;
             strncpy(names_[count_], mname ? mname : "Preset", NAM_DATA_NAME_LEN - 1);
             names_[count_][NAM_DATA_NAME_LEN - 1] = '\0';
             count_++;
@@ -68,21 +78,25 @@ void PresetManager::ApplyPreset(const NamPreset& p,
     engine.SetBypass(p.bypass != 0);
     engine.SetInputGain(p.input_gain);
     engine.SetOutputVol(p.output_volume);
+    engine.SetEqBand(Eq3::Band::Bass,   p.eq_bass_gain,   eq_freq_or(p.eq_bass_freq,   100.0f));
+    engine.SetEqBand(Eq3::Band::Mid,    p.eq_mid_gain,    eq_freq_or(p.eq_mid_freq,    750.0f));
+    engine.SetEqBand(Eq3::Band::Treble, p.eq_treble_gain, eq_freq_or(p.eq_treble_freq, 4000.0f));
 
-    // Load model by name. If specified but not found, engage bypass.
+    // Load model by name. If the named model is missing OR fails to load
+    // (corrupt blob, parse error), engage bypass rather than leaving a stale
+    // or null model running with bypass disabled.
     if (p.model_name[0] != '\0')
     {
-        bool found = false;
+        bool loaded = false;
         for (uint8_t m = 0; m < models.Count(); ++m)
         {
             if (strncmp(models.Name(m), p.model_name, NAM_DATA_NAME_LEN) == 0)
             {
-                models.Load(m, engine, sample_rate, block_size);
-                found = true;
+                loaded = models.Load(m, engine, sample_rate, block_size);
                 break;
             }
         }
-        if (!found)
+        if (!loaded)
             engine.SetBypass(true);
     }
 

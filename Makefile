@@ -10,6 +10,7 @@ CPP_SOURCES = \
   NamEmbeddedStubs.cpp \
   QspiStorage.cpp \
   AudioEngine.cpp \
+  Eq3.cpp \
   IRLoader.cpp \
   ModelManager.cpp \
   PresetManager.cpp \
@@ -58,6 +59,7 @@ LDFLAGS = -u _printf_float
 C_DEFS = \
   -DNAM_SAMPLE_FLOAT \
   -DNAM_USE_INLINE_GEMM \
+  -DNAM_ENABLE_A2_FAST \
   -D__ARM_ARCH_7EM__ \
   -DUSE_ARM_DSP
 

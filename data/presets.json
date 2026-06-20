@@ -5,6 +5,10 @@
     "ir": "ir",
     "input_gain": 1.0,
     "output_volume": 0.8,
-    "bypass": false
+    "bypass": false,
+    "eq": {
+      "bass_gain": 2.0, "mid_gain": -1.5, "treble_gain": 1.0,
+      "bass_freq": 100, "mid_freq": 750, "treble_freq": 4000
+    }
   }
 ]

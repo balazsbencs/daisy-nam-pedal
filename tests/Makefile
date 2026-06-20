@@ -15,12 +15,13 @@ CXXFLAGS = -std=c++17 -O0 -g \
 
 # Production sources compiled for the host (with hardware deps satisfied by shims).
 QSPI_SRCS      = ../QspiStorage.cpp
-AUDIO_SRCS     = ../AudioEngine.cpp
+EQ_SRCS        = ../Eq3.cpp
+AUDIO_SRCS     = ../AudioEngine.cpp ../Eq3.cpp
 IR_SRCS        = ../IRLoader.cpp
 PRESET_SRCS    = ../PresetManager.cpp
 MODEL_STUB_SRC = stub_impls/ModelManager_stub.cpp
 
-BINARIES = test_data_format test_qspi_storage test_preset_manager test_ir_loader
+BINARIES = test_data_format test_qspi_storage test_preset_manager test_ir_loader test_eq3 test_audio_engine
 
 .PHONY: all run clean
 
@@ -47,6 +48,14 @@ test_preset_manager: test_preset_manager.cpp \
 test_ir_loader: test_ir_loader.cpp $(IR_SRCS) $(QSPI_SRCS)
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
+# EQ magnitude response
+test_eq3: test_eq3.cpp $(EQ_SRCS)
+	$(CXX) $(CXXFLAGS) $^ -o $@
+
+# AudioEngine EQ integration
+test_audio_engine: test_audio_engine.cpp $(AUDIO_SRCS)
+	$(CXX) $(CXXFLAGS) $^ -o $@
+
 run: all
 	@echo "=== TEST-01: data_format ==="
 	./test_data_format
@@ -56,6 +65,10 @@ run: all
 	./test_preset_manager
 	@echo "=== TEST-09/10: ir_loader ==="
 	./test_ir_loader
+	@echo "=== test_eq3 ==="
+	./test_eq3
+	@echo "=== test_audio_engine ==="
+	./test_audio_engine
 	@echo "=== TEST-11: tools (Python) ==="
 	python3 test_tools.py
 

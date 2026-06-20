@@ -95,10 +95,22 @@ static void test_null_base()
     CHECK(s != QspiStorage::Status::OK);
 }
 
+static void test_blob_flash_offset()
+{
+    NamDataEntry e{};
+    e.type   = NAM_ENTRY_PRESET;
+    e.offset = 0x5000;           // 4 KiB-aligned blob offset
+    e.length = sizeof(NamPreset);
+    CHECK_EQ(QspiStorage::BlobFlashOffset(&e), NAM_DATA_PARTITION_OFFSET + 0x5000u);
+    // Blob sits at a sector boundary so the erase only touches its own sector.
+    CHECK_EQ(e.offset % NAM_DATA_SECTOR_SIZE, 0u);
+}
+
 int main()
 {
     test_valid_partition();
     test_bad_magic();
     test_null_base();
+    test_blob_flash_offset();
     return test_summary("qspi_storage");
 }

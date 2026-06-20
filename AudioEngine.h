@@ -9,6 +9,7 @@
 //   in → input_gain → NAM model → IR convolver → output_vol → out L+R
 
 #pragma once
+#include "Eq3.h"
 #include "NAM/dsp.h"
 #include <atomic>
 #include <memory>
@@ -41,6 +42,11 @@ public:
     void SetOutputVol(float v)  { output_vol_.store(v);  }
     void SetBypass(bool b)      { bypass_.store(b);      }
 
+    // Update one EQ band (main loop only). gain in dB, freq in Hz.
+    void  SetEqBand(Eq3::Band b, float gain_db, float freq_hz) { eq_.SetBand(b, gain_db, freq_hz); }
+    float GetEqGain(Eq3::Band b) const { return eq_.GetGainDb(b); }
+    float GetEqFreq(Eq3::Band b) const { return eq_.GetFreq(b); }
+
     float GetInputGain()  const { return input_gain_.load(); }
     float GetOutputVol()  const { return output_vol_.load(); }
     bool  GetBypass()     const { return bypass_.load();     }
@@ -60,6 +66,8 @@ private:
     std::atomic<float> input_gain_{1.0f};
     std::atomic<float> output_vol_{1.0f};
     std::atomic<bool>  bypass_{true};
+
+    Eq3 eq_;
 
     size_t block_size_   = 48;
     float  sample_rate_  = 48000.0f;

@@ -5,6 +5,7 @@ void AudioEngine::Init(size_t block_size, float sample_rate)
 {
     block_size_  = block_size;
     sample_rate_ = sample_rate;
+    eq_.Reset(sample_rate);
 }
 
 void AudioEngine::Process(const float* in, float* out, size_t frames)
@@ -44,6 +45,9 @@ void AudioEngine::Process(const float* in, float* out, size_t frames)
     IIRConvolver* ir = active_ir_.load();
     if (ir)
         ir->Process(scratch_out_, scratch_out_, frames);
+
+    // Tone EQ stage (post-IR).
+    eq_.Process(scratch_out_, frames);
 
     // Apply output volume and write result.
     for (size_t i = 0; i < frames; ++i)

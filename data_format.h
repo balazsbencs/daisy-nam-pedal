@@ -91,7 +91,14 @@ typedef struct __attribute__((packed))
     float   input_gain;                    // 62..65
     float   output_volume;                 // 66..69
     uint8_t bypass;                        // 70      (0 = active, 1 = passthrough)
-    uint8_t pad[3];                        // 71..73  explicit padding to 74 bytes
+    uint8_t pad[3];                        // 71..73  explicit padding
+    // --- EQ block (appended; older blobs lack this — see PresetManager) ---
+    float   eq_bass_gain;                  // 74..77   dB  [-12,12]
+    float   eq_mid_gain;                   // 78..81   dB
+    float   eq_treble_gain;                // 82..85   dB
+    float   eq_bass_freq;                  // 86..89   Hz  (0 = use default)
+    float   eq_mid_freq;                   // 90..93   Hz
+    float   eq_treble_freq;                // 94..97   Hz
 } NamPreset;
 
 #ifdef __cplusplus
@@ -101,7 +108,7 @@ typedef struct __attribute__((packed))
 #ifdef __cplusplus
 static_assert(sizeof(NamDataHeader) == 8,  "NamDataHeader size mismatch");
 static_assert(sizeof(NamDataEntry)  == 48, "NamDataEntry size mismatch");
-static_assert(sizeof(NamPreset)     == 74, "NamPreset size mismatch — check packing vs Python PRESET_FMT");
+static_assert(sizeof(NamPreset)     == 98, "NamPreset size mismatch — check packing vs Python PRESET_FMT");
 #endif
 
 #endif // NAM_DATA_FORMAT_H

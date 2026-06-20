@@ -48,6 +48,16 @@ public:
     // Convenience: BlobPtr by index. Returns nullptr if index out of range.
     const uint8_t* BlobPtr(uint16_t idx) const;
 
+    // QSPI-relative address of an entry's blob (argument to QSPIHandle Erase/Write).
+    static uint32_t BlobFlashOffset(const NamDataEntry* entry)
+    {
+        return NAM_DATA_PARTITION_OFFSET + entry->offset;
+    }
+
+    // Erase+program one preset blob in place. HARDWARE: caller MUST stop audio and
+    // ensure no QSPI-resident code/IRQ runs during the call (see plan §6a).
+    Status WritePreset(const NamDataEntry* entry, const NamPreset& p);
+
     // Dump all entries to the Daisy serial log (call after Init() for debugging).
     void PrintDirectory(daisy::DaisySeed& seed) const;
 

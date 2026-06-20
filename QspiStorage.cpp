@@ -86,6 +86,25 @@ const uint8_t* QspiStorage::BlobPtr(uint16_t idx) const
     return BlobPtr(GetEntry(idx));
 }
 
+QspiStorage::Status QspiStorage::WritePreset(const NamDataEntry* entry, const NamPreset& p)
+{
+    if (status_ != Status::OK || !entry) return Status::NOT_INIT;
+
+#ifdef HOST_BUILD
+    (void)p;                      // no real flash on host; serialization covered by tests
+    return Status::OK;
+#else
+    uint32_t addr = BlobFlashOffset(entry);                 // QSPI-relative
+    // Blobs are 4 KiB-aligned, so erasing this blob's sector won't disturb neighbors.
+    if (qspi_.Erase(addr, addr + NAM_DATA_SECTOR_SIZE - 1) != daisy::QSPIHandle::Result::OK)
+        return Status::BAD_MAGIC;                            // reuse as generic write error
+    if (qspi_.Write(addr, sizeof(NamPreset),
+                    reinterpret_cast<uint8_t*>(const_cast<NamPreset*>(&p))) != daisy::QSPIHandle::Result::OK)
+        return Status::BAD_MAGIC;
+    return Status::OK;
+#endif
+}
+
 void QspiStorage::PrintDirectory(DaisySeed& seed) const
 {
     if(status_ != Status::OK)

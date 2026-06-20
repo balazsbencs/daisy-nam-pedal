@@ -39,7 +39,7 @@ ENTRY_PRESET = 2
 
 HEADER_FMT = "<IHH"  # magic, version, count  -> 8 bytes
 ENTRY_FMT = "<B31sIIII"  # type, name, offset, length, samplerate, reserved -> 48
-PRESET_FMT = "<31s31sffB3x"  # model, ir, in_gain, out_vol, bypass, pad -> 74 bytes
+PRESET_FMT = "<31s31sffB3x6f"  # model, ir, in_gain, out_vol, bypass, pad, 6×EQ -> 98 bytes
 
 assert struct.calcsize(HEADER_FMT) == 8
 assert struct.calcsize(ENTRY_FMT) == 48
@@ -151,6 +151,24 @@ def gather_blobs(src_dir, max_taps):
     return entries
 
 
+def pack_preset(p):
+    eq = p.get("eq", {})
+    return struct.pack(
+        PRESET_FMT,
+        encode_name(p.get("model", "")),
+        encode_name(p.get("ir", "")),
+        float(p.get("input_gain", 1.0)),
+        float(p.get("output_volume", 0.85)),
+        1 if p.get("bypass", False) else 0,
+        float(eq.get("bass_gain", 0.0)),
+        float(eq.get("mid_gain", 0.0)),
+        float(eq.get("treble_gain", 0.0)),
+        float(eq.get("bass_freq", 100.0)),
+        float(eq.get("mid_freq", 750.0)),
+        float(eq.get("treble_freq", 4000.0)),
+    )
+
+
 def gather_presets(src_dir):
     """Return preset entries from an optional presets.json."""
     path = os.path.join(src_dir, "presets.json")
@@ -161,14 +179,7 @@ def gather_presets(src_dir):
 
     entries = []
     for p in presets:
-        blob = struct.pack(
-            PRESET_FMT,
-            encode_name(p.get("model", "")),
-            encode_name(p.get("ir", "")),
-            float(p.get("input_gain", 1.0)),
-            float(p.get("output_volume", 1.0)),
-            1 if p.get("bypass", False) else 0,
-        )
+        blob = pack_preset(p)
         name = p.get("name", "preset")
         entries.append((ENTRY_PRESET, name, blob, 0))
         print(f"  preset {name:<24} model={p.get('model','')} ir={p.get('ir','')}")
