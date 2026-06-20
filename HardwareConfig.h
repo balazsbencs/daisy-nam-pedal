@@ -50,11 +50,15 @@ constexpr Pin PIN_ENC1_A     = seed::D0;
 constexpr Pin PIN_ENC1_B     = seed::D1;
 constexpr Pin PIN_ENC1_CLICK = seed::D2;
 
-// Encoder 2 (optional — set ENC2_PRESENT = false to disable)
-constexpr Pin PIN_ENC2_A     = seed::D7;
-constexpr Pin PIN_ENC2_B     = seed::D8;
-constexpr Pin PIN_ENC2_CLICK = seed::D9;
-constexpr bool ENC2_PRESENT = false; // flip to true when hardware is wired
+// Encoders 2–5 (click-less QuadEncoder, A/B only)
+constexpr Pin PIN_ENC2_A = seed::D7;
+constexpr Pin PIN_ENC2_B = seed::D8;
+constexpr Pin PIN_ENC3_A = seed::D9;
+constexpr Pin PIN_ENC3_B = seed::D10;
+constexpr Pin PIN_ENC4_A = seed::D27;
+constexpr Pin PIN_ENC4_B = seed::D28;
+constexpr Pin PIN_ENC5_A = seed::D29;
+constexpr Pin PIN_ENC5_B = seed::D30;
 
 // ---------------------------------------------------------------------------
 // ST7789 display (240×320, SPI1) — confirmed pinout, see docs/HARDWARE.md
