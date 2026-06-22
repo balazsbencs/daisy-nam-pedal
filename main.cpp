@@ -16,6 +16,7 @@
 #include "PresetManager.h"
 #include "QspiStorage.h"
 #include "Ui.h"
+#include "ui_mode.h"
 #include <cstring>
 
 using namespace daisy;
@@ -706,7 +707,8 @@ int main()
                 audio_engine.GetBypass() ? "Y" : "N");
             cb_max_cyc   = 0;
             last_diag_ms = now;
-            PushPerformanceScreen();
+            if (ShouldRefreshPerformanceScreen(browsing, editing))
+                PushPerformanceScreen();
         }
     }
 }
