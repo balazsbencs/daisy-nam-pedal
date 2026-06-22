@@ -48,7 +48,13 @@ Clone the repo and initialise all submodules (including their nested dependencie
 git clone <repo-url>
 cd daisy-nam-pedal
 git submodule update --init --recursive
+tools/apply_submodule_patches.sh
 ```
+
+The upstream submodule URLs and pinned commits remain unchanged. The pedal's
+local adaptations are owned by this repository as patches under
+`patches/submodules/`. It is safe to rerun the patch script; changes that are
+already present are left untouched.
 
 Then build the two pre-compiled libraries:
 
