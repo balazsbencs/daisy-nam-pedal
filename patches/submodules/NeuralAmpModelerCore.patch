@@ -1,5 +1,5 @@
 diff --git a/NAM/dsp.cpp b/NAM/dsp.cpp
-index 0aea735..3e7fef1 100644
+index 0aea735..4b2e384 100644
 --- a/NAM/dsp.cpp
 +++ b/NAM/dsp.cpp
 @@ -1,8 +1,6 @@
@@ -11,6 +11,18 @@ index 0aea735..3e7fef1 100644
  #include <stdexcept>
  #include <string>
  #include <unordered_map>
+@@ -17,7 +15,10 @@ constexpr const long _INPUT_BUFFER_SAFETY_FACTOR = 32;
+ namespace
+ {
+ 
+-thread_local bool gPrewarmOnResetDefault = true;
++#ifdef HOST_BUILD
++thread_local
++#endif
++bool gPrewarmOnResetDefault = true;
+ 
+ class ScopedDSPPrewarmOnReset
+ {
 diff --git a/NAM/get_dsp.h b/NAM/get_dsp.h
 index c9e7941..c446404 100644
 --- a/NAM/get_dsp.h
