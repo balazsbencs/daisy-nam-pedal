@@ -1,0 +1,177 @@
+diff --git a/namb/get_dsp_namb.cpp b/namb/get_dsp_namb.cpp
+index 8247a83..dce935c 100644
+--- a/namb/get_dsp_namb.cpp
++++ b/namb/get_dsp_namb.cpp
+@@ -3,8 +3,10 @@
+ 
+ #include <algorithm>
+ #include <cstring>
+-#include <fstream>
+ #include <stdexcept>
++#ifdef HOST_BUILD
++#include <fstream>
++#endif
+ 
+ #include "get_dsp_namb.h"
+ 
+@@ -13,7 +15,11 @@
+ #include <NAM/dsp.h>
+ #include <NAM/lstm.h>
+ #include <NAM/model_config.h>
+-#include <NAM/wavenet.h>
++#if defined(NAM_ENABLE_A2_FAST)
++  #include <NAM/wavenet/a2_fast.h>
++#endif
++#include <NAM/wavenet/model.h>
++#include <NAM/wavenet/params.h>
+ #include "binary_parser_registry.h"
+ #include "namb_format.h"
+ 
+@@ -147,6 +153,70 @@ nam::ModelMetadata to_model_metadata(const ParsedMetadata& pm)
+   return meta;
+ }
+ 
++#if defined(NAM_ENABLE_A2_FAST)
++bool film_inactive(const nam::wavenet::_FiLMParams& p)
++{
++  // shift/groups only affect active FiLM blocks. NAM files commonly retain
++  // shift=true in an inactive block, which must not disqualify an A2 model.
++  return !p.active;
++}
++
++bool activation_is_a2_leaky_relu(const nam::activations::ActivationConfig& c)
++{
++  return c.type == nam::activations::ActivationType::LeakyReLU
++         && c.negative_slope.has_value()
++         && std::abs(*c.negative_slope - nam::wavenet::a2_fast::kLeakySlope) < 1.0e-6f;
++}
++
++bool is_a2_wavenet_config(const nam::wavenet::WaveNetConfig& wc, int* channels)
++{
++  using nam::wavenet::a2_fast::kDilations;
++  using nam::wavenet::a2_fast::kHeadKernelSize;
++  using nam::wavenet::a2_fast::kKernelSizes;
++  using nam::wavenet::a2_fast::kNumLayers;
++
++  if (wc.in_channels != 1 || wc.with_head || wc.condition_dsp || wc.layer_array_params.size() != 1)
++    return false;
++
++  const auto& la = wc.layer_array_params[0];
++  if (la.input_size != 1 || la.condition_size != 1 || la.head_size != 1)
++    return false;
++  if (la.channels != la.bottleneck || (la.channels != 3 && la.channels != 8))
++    return false;
++  if (la.head_kernel_size != kHeadKernelSize || !la.head_bias)
++    return false;
++  if (la.groups_input != 1 || la.groups_input_mixin != 1)
++    return false;
++  if (!la.layer1x1_params.active || la.layer1x1_params.groups != 1)
++    return false;
++  if (la.head1x1_params.active)
++    return false;
++  if (la.kernel_sizes.size() != kNumLayers || la.dilations.size() != kNumLayers
++      || la.activation_configs.size() != kNumLayers || la.gating_modes.size() != kNumLayers)
++    return false;
++
++  for (int i = 0; i < kNumLayers; ++i)
++  {
++    if (la.kernel_sizes[i] != kKernelSizes[i] || la.dilations[i] != kDilations[i])
++      return false;
++    if (!activation_is_a2_leaky_relu(la.activation_configs[i]))
++      return false;
++    if (la.gating_modes[i] != nam::wavenet::GatingMode::NONE)
++      return false;
++  }
++
++  if (!film_inactive(la.conv_pre_film_params) || !film_inactive(la.conv_post_film_params)
++      || !film_inactive(la.input_mixin_pre_film_params) || !film_inactive(la.input_mixin_post_film_params)
++      || !film_inactive(la.activation_pre_film_params) || !film_inactive(la.activation_post_film_params)
++      || !film_inactive(la._layer1x1_post_film_params) || !film_inactive(la.head1x1_post_film_params))
++    return false;
++
++  if (channels)
++    *channels = la.channels;
++  return true;
++}
++#endif
++
+ // =============================================================================
+ // Binary parsing into typed configs
+ // =============================================================================
+@@ -331,6 +401,11 @@ std::unique_ptr<nam::ModelConfig> load_wavenet(BinaryReader& r, const float*& we
+       activation_post_film, layer1x1_post_film, head1x1_post_film);
+   }
+ 
++#if defined(NAM_ENABLE_A2_FAST)
++  if (int a2_channels = 0; is_a2_wavenet_config(*wc, &a2_channels))
++    return nam::wavenet::a2_fast::create_a2_fast_config(a2_channels);
++#endif
++
+   // head_scale is the last weight value, but set_weights_ will overwrite it.
+   // Pass 0.0f; set_weights_ will set the correct value from weights.
+   wc->head_scale = 0.0f;
+@@ -429,6 +504,7 @@ std::unique_ptr<nam::DSP> nam::get_dsp_namb(const uint8_t* data, size_t size)
+   return dsp;
+ }
+ 
++#ifdef HOST_BUILD
+ std::unique_ptr<nam::DSP> nam::get_dsp_namb(const std::filesystem::path& filename)
+ {
+   if (!std::filesystem::exists(filename))
+@@ -448,3 +524,4 @@ std::unique_ptr<nam::DSP> nam::get_dsp_namb(const std::filesystem::path& filenam
+ 
+   return get_dsp_namb(data.data(), data.size());
+ }
++#endif
+diff --git a/namb/get_dsp_namb.h b/namb/get_dsp_namb.h
+index 4b033c0..77e325d 100644
+--- a/namb/get_dsp_namb.h
++++ b/namb/get_dsp_namb.h
+@@ -3,19 +3,25 @@
+ // No dependency on nlohmann/json - suitable for embedded targets
+ 
+ #include <cstdint>
+-#include <filesystem>
+ #include <memory>
++#include <stdexcept>
++
++#ifdef HOST_BUILD
++#include <filesystem>
++#endif
+ 
+ #include <NAM/dsp.h>
+ 
+ namespace nam
+ {
+ 
++#ifdef HOST_BUILD
+ /// \brief Load a NAM model from a .namb binary file
+ /// \param filename Path to the .namb file
+ /// \return Unique pointer to a DSP object
+ /// \throws std::runtime_error on format errors
+ std::unique_ptr<DSP> get_dsp_namb(const std::filesystem::path& filename);
++#endif
+ 
+ /// \brief Load a NAM model from a memory buffer containing .namb data
+ /// \param data Pointer to the binary data
+diff --git a/tools/loadmodel.cpp b/tools/loadmodel.cpp
+index c6c28c8..3901760 100644
+--- a/tools/loadmodel.cpp
++++ b/tools/loadmodel.cpp
+@@ -3,6 +3,7 @@
+ #include <NAM/dsp.h>
+ #include <NAM/get_dsp.h>
+ #include <namb/get_dsp_namb.h>
++#include <typeinfo>
+ 
+ int main(int argc, char* argv[])
+ {
+@@ -21,7 +22,7 @@ int main(int argc, char* argv[])
+ 
+     if (model != nullptr)
+     {
+-      fprintf(stderr, "Model loaded successfully\n");
++      fprintf(stderr, "Model loaded successfully: %s\n", typeid(*model).name());
+     }
+     else
+     {

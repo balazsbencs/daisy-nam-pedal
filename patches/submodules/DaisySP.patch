@@ -1,0 +1,12 @@
+diff --git a/Source/Filters/fir.h b/Source/Filters/fir.h
+index 1d33fee..197e925 100644
+--- a/Source/Filters/fir.h
++++ b/Source/Filters/fir.h
+@@ -14,6 +14,7 @@ https://opensource.org/licenses/MIT.
+ #include <cstring> // for memset
+ #include <cassert>
+ #include <utility>
++#include "Utility/dsp.h"
+ 
+ #ifdef USE_ARM_DSP
+ #include <arm_math.h> // required for platform-optimized version

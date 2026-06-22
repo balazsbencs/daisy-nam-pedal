@@ -1,0 +1,171 @@
+diff --git a/NAM/dsp.cpp b/NAM/dsp.cpp
+index 0aea735..3e7fef1 100644
+--- a/NAM/dsp.cpp
++++ b/NAM/dsp.cpp
+@@ -1,8 +1,6 @@
+ #include <algorithm> // std::max_element
+ #include <cmath> // pow, tanh, expf
+ #include <cstring>
+-#include <filesystem>
+-#include <fstream>
+ #include <stdexcept>
+ #include <string>
+ #include <unordered_map>
+diff --git a/NAM/get_dsp.h b/NAM/get_dsp.h
+index c9e7941..c446404 100644
+--- a/NAM/get_dsp.h
++++ b/NAM/get_dsp.h
+@@ -1,6 +1,9 @@
+ #pragma once
+ 
++#ifdef HOST_BUILD
+ #include <fstream>
++#include <filesystem>
++#endif
+ #include <memory>
+ #include <optional>
+ #include <vector>
+@@ -77,35 +80,24 @@ struct DspLoadOptions
+   std::optional<bool> prewarm = std::nullopt;
+ };
+ 
++#ifdef HOST_BUILD
+ /// \brief Get NAM from a .nam file at the provided location
+-/// \param config_filename Path to the .nam model file
+-/// \param options Loading options
+-/// \return Unique pointer to a DSP object
+ std::unique_ptr<DSP> get_dsp(const std::filesystem::path config_filename, DspLoadOptions options = DspLoadOptions());
+ 
+-/// \brief Get NAM from a provided configuration struct
+-/// \param conf DSP data structure containing model configuration and weights
+-/// \param options Loading options
+-/// \return Unique pointer to a DSP object
+-std::unique_ptr<DSP> get_dsp(dspData& conf, DspLoadOptions options = DspLoadOptions());
+-
+ /// \brief Get NAM from a .nam file and store its configuration
+-///
+-/// Creates an instance of DSP and also returns a dspData struct that holds the data of the model.
+-/// \param config_filename Path to the .nam model file
+-/// \param returnedConfig Output parameter that will be filled with the model data
+-/// \param options Loading options
+-/// \return Unique pointer to a DSP object
+ std::unique_ptr<DSP> get_dsp(const std::filesystem::path config_filename, dspData& returnedConfig,
+                              DspLoadOptions options = DspLoadOptions());
+ 
+-/// \brief Get NAM from a provided configuration JSON object
+-/// \param config JSON configuration object
+-/// \param returnedConfig Output parameter that will be filled with the model data
+-/// \param options Loading options
+-/// \return Unique pointer to a DSP object
++/// \brief Get NAM from a provided configuration JSON object (with output config)
+ std::unique_ptr<DSP> get_dsp(const nlohmann::json& config, dspData& returnedConfig,
+                              DspLoadOptions options = DspLoadOptions());
++#endif
++
++/// \brief Get NAM from a provided configuration struct
++/// \param conf DSP data structure containing model configuration and weights
++/// \param options Loading options
++/// \return Unique pointer to a DSP object
++std::unique_ptr<DSP> get_dsp(dspData& conf, DspLoadOptions options = DspLoadOptions());
+ 
+ /// \brief Get NAM from a provided configuration JSON object (convenience overload)
+ /// \param config JSON configuration object
+@@ -113,8 +105,10 @@ std::unique_ptr<DSP> get_dsp(const nlohmann::json& config, dspData& returnedConf
+ /// \return Unique pointer to a DSP object
+ std::unique_ptr<DSP> get_dsp(const nlohmann::json& config, DspLoadOptions options = DspLoadOptions());
+ 
++#ifdef HOST_BUILD
+ /// \brief Get sample rate from a .nam file
+ /// \param j JSON object from the .nam file
+ /// \return Sample rate in Hz, or -1 if not known (really old .nam files)
+ double get_sample_rate_from_nam_file(const nlohmann::json& j);
++#endif
+ }; // namespace nam
+diff --git a/NAM/wavenet/a2_fast.cpp b/NAM/wavenet/a2_fast.cpp
+index 33af67a..a5e0edf 100644
+--- a/NAM/wavenet/a2_fast.cpp
++++ b/NAM/wavenet/a2_fast.cpp
+@@ -1010,8 +1010,15 @@ std::unique_ptr<ModelConfig> create_a2_fast_config(const nlohmann::json& config,
+   int ch = 0;
+   if (!is_a2_shape(config, &ch))
+     throw std::runtime_error("create_a2_fast_config: config does not match A2 shape");
++  return create_a2_fast_config(ch);
++}
++
++std::unique_ptr<ModelConfig> create_a2_fast_config(int channels)
++{
++  if (channels != 3 && channels != 8)
++    throw std::runtime_error("create_a2_fast_config: unsupported channel count " + std::to_string(channels));
+   auto out = std::make_unique<A2FastConfig>();
+-  out->channels = ch;
++  out->channels = channels;
+   return out;
+ }
+ 
+diff --git a/NAM/wavenet/a2_fast.h b/NAM/wavenet/a2_fast.h
+index 7bc1b0b..656d7ad 100644
+--- a/NAM/wavenet/a2_fast.h
++++ b/NAM/wavenet/a2_fast.h
+@@ -52,6 +52,11 @@ bool is_a2_shape(const nlohmann::json& config, int* channels);
+ /// \pre is_a2_shape(config, ...) returned true.
+ std::unique_ptr<ModelConfig> create_a2_fast_config(const nlohmann::json& config, double sampleRate);
+ 
++/// \brief Build a ModelConfig that instantiates the A2 fast path for a known
++/// A2 channel count.
++/// \param channels Must be 3 (A2 nano) or 8 (A2 standard).
++std::unique_ptr<ModelConfig> create_a2_fast_config(int channels);
++
+ } // namespace a2_fast
+ } // namespace wavenet
+ } // namespace nam
+diff --git a/NAM/wavenet/model.cpp b/NAM/wavenet/model.cpp
+index e3fc8cc..a4a2fa7 100644
+--- a/NAM/wavenet/model.cpp
++++ b/NAM/wavenet/model.cpp
+@@ -9,7 +9,9 @@
+ 
+ #include "../get_dsp.h"
+ #include "../registry.h"
++#ifdef HOST_BUILD
+ #include "slimmable.h"
++#endif
+ #include "model.h"
+ 
+ #if defined(NAM_ENABLE_A2_FAST)
+@@ -831,6 +833,7 @@ void nam::wavenet::WaveNet::process(NAM_SAMPLE** input, NAM_SAMPLE** output, con
+   }
+ }
+ 
++#ifdef HOST_BUILD
+ // Config parser - extracts all configuration from JSON without constructing the DSP
+ nam::wavenet::WaveNetConfig nam::wavenet::parse_config_json(const nlohmann::json& config,
+                                                             const double expectedSampleRate)
+@@ -1189,6 +1192,7 @@ nam::wavenet::WaveNetConfig nam::wavenet::parse_config_json(const nlohmann::json
+ 
+   return wc;
+ }
++#endif // HOST_BUILD (parse_config_json)
+ 
+ // WaveNetConfig::create()
+ std::unique_ptr<nam::DSP> nam::wavenet::WaveNetConfig::create(std::vector<float> weights, double sampleRate)
+@@ -1198,6 +1202,7 @@ std::unique_ptr<nam::DSP> nam::wavenet::WaveNetConfig::create(std::vector<float>
+                                                  sampleRate);
+ }
+ 
++#ifdef HOST_BUILD
+ namespace
+ {
+ const std::string SLIMMABLE_METHOD = "slice_channels_uniform";
+@@ -1239,9 +1244,12 @@ std::unique_ptr<nam::ModelConfig> nam::wavenet::create_config(const nlohmann::js
+   *wc = std::move(parsed);
+   return wc;
+ }
++#endif // HOST_BUILD
+ 
++#ifdef HOST_BUILD
+ // Register the config parser
+ namespace
+ {
+ static nam::ConfigParserHelper _register_WaveNet("WaveNet", nam::wavenet::create_config);
+ }
++#endif // HOST_BUILD
