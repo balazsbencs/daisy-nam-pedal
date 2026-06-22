@@ -42,6 +42,14 @@ static bool    preset_dirty  = false; // unsaved live-edit changes
 // CPU diagnostics
 static volatile uint32_t cb_count   = 0;
 static volatile uint32_t cb_max_cyc = 0;
+static volatile float    diag_input_peak = 0.0f;
+
+// Audio diagnostics:
+// 0 = full pedal DSP, 1 = input passthrough, 2 = generated beep pattern,
+// 3 = process one full DSP block, then silence (measures an over-budget block).
+static constexpr uint8_t kAudioDiagMode = 2;
+static constexpr bool    kDisplayEnabled = true;
+static constexpr bool    kDisableIrForTiming = false;
 
 static constexpr uint32_t kCbBudgetCyc   = 480000;
 static constexpr uint32_t kCbOverloadCyc = (kCbBudgetCyc * 9) / 10;
@@ -76,23 +84,70 @@ static uint8_t       edit_preset_idx = 0;
 // ---------------------------------------------------------------------------
 // Audio callback — runs every 1 ms, must be deterministic
 // ---------------------------------------------------------------------------
-static void AudioCallback(AudioHandle::InterleavingInputBuffer  in,
-                          AudioHandle::InterleavingOutputBuffer out,
-                          size_t size)
+static void AudioCallback(AudioHandle::InputBuffer  in,
+                          AudioHandle::OutputBuffer out,
+                          size_t                    frames)
 {
     cb_count++;
     uint32_t t0 = DWT->CYCCNT;
+    static float tone_phase = 0.0f;
+    static uint32_t diag_frame = 0;
 
-    size_t frames = size / 2;
     float mono_in[hw::AUDIO_BLOCK_SIZE];
     float mono_out[hw::AUDIO_BLOCK_SIZE];
     for (size_t i = 0; i < frames; ++i)
-        mono_in[i] = in[i * 2];
+    {
+        mono_in[i] = in[0][i];
+        float magnitude = mono_in[i] < 0.0f ? -mono_in[i] : mono_in[i];
+        if(magnitude > diag_input_peak)
+            diag_input_peak = magnitude;
+    }
 
-    audio_engine.Process(mono_in, mono_out, frames);
+    if constexpr (kAudioDiagMode == 2)
+    {
+        for (size_t i = 0; i < frames; ++i)
+        {
+            // Repeating 3-second signature: 440 Hz, silence, 880 Hz, silence.
+            const bool  first_beep  = diag_frame < 48000u;
+            const bool  second_beep = diag_frame >= 72000u && diag_frame < 120000u;
+            const float frequency   = second_beep ? 880.0f : 440.0f;
+            const float phase_inc   = frequency / hw::AUDIO_SAMPLE_RATE;
+            tone_phase += phase_inc;
+            if (tone_phase >= 1.0f)
+                tone_phase -= 1.0f;
+            mono_out[i] = (first_beep || second_beep)
+                              ? ((tone_phase < 0.5f) ? 0.75f : -0.75f)
+                              : 0.0f;
+            if(++diag_frame >= 144000u)
+                diag_frame = 0;
+        }
+    }
+    else if constexpr (kAudioDiagMode == 1)
+    {
+        for (size_t i = 0; i < frames; ++i)
+            mono_out[i] = mono_in[i];
+    }
+    else if constexpr (kAudioDiagMode == 3)
+    {
+        static bool probe_complete = false;
+        if(!probe_complete)
+        {
+            audio_engine.Process(mono_in, mono_out, frames);
+            probe_complete = true;
+        }
+        else
+        {
+            for (size_t i = 0; i < frames; ++i)
+                mono_out[i] = 0.0f;
+        }
+    }
+    else
+    {
+        audio_engine.Process(mono_in, mono_out, frames);
+    }
 
     for (size_t i = 0; i < frames; ++i)
-        out[i * 2] = out[i * 2 + 1] = mono_out[i];
+        out[0][i] = out[1][i] = mono_out[i];
 
     uint32_t cyc = DWT->CYCCNT - t0;
     if (cyc > cb_max_cyc) cb_max_cyc = cyc;
@@ -124,6 +179,9 @@ static void BuildNamePointers()
 
 static void PushPerformanceScreen()
 {
+    if constexpr (!kDisplayEnabled)
+        return;
+
     const NamPreset& p = presets.ActivePreset();
     Ui::PerformanceState s;
     s.preset_name  = presets.Name(presets.Current());
@@ -144,6 +202,9 @@ static void PushPerformanceScreen()
 
 static void PushBrowseScreen()
 {
+    if constexpr (!kDisplayEnabled)
+        return;
+
     Ui::BrowseState s;
     s.title      = "PRESETS";
     s.names      = preset_name_ptrs;
@@ -202,7 +263,8 @@ static void PushEditScreen(uint8_t preset_idx)
 
     edit_state.field   = 0;
     edit_state.editing = false;
-    ui.ShowEdit(edit_state);
+    if constexpr (kDisplayEnabled)
+        ui.ShowEdit(edit_state);
 }
 
 // Write active preset to QSPI flash (XIP-safe: stops audio around erase/program).
@@ -233,7 +295,7 @@ static void SaveActivePreset()
 int main()
 {
     // --- Hardware init -------------------------------------------------------
-    daisy_seed.Init();
+    daisy_seed.Init(true); // 480 MHz boost; full NAM DSP does not fit at 400 MHz.
 
     uint32_t fpscr = __get_FPSCR();
     fpscr |= (1U << 24) | (1U << 25);
@@ -242,6 +304,8 @@ int main()
 
     daisy_seed.StartLog(false);
     daisy_seed.PrintLine("NamPlatform booting...");
+    // DIAGNOSTIC: 0=DAISY_SEED(AK4556) 1=DAISY_SEED_1_1(WM8731) 2=SEED_2_DFM
+    daisy_seed.PrintLine("Board version: %d", (int)daisy_seed.CheckBoardVersion());
 
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CYCCNT = 0;
@@ -251,43 +315,81 @@ int main()
     daisy_seed.PrintLine("Init storage...");
     if (storage.Init() != QspiStorage::Status::OK)
         daisy_seed.PrintLine("WARNING: data partition missing — flash a data image first.");
-    storage.PrintDirectory(daisy_seed);
+    daisy_seed.PrintLine("Storage ready: %u entries.",
+                         (unsigned)storage.EntryCount());
+    System::Delay(200);
 
     // --- Audio engine --------------------------------------------------------
     audio_engine.Init(hw::AUDIO_BLOCK_SIZE, hw::AUDIO_SAMPLE_RATE);
 
     // --- Managers ------------------------------------------------------------
     daisy_seed.PrintLine("Init models...");
+    System::Delay(200);
     models.Init(storage);
     daisy_seed.PrintLine("  %u model(s) found", (unsigned)models.Count());
+    System::Delay(200);
 
     daisy_seed.PrintLine("Init presets...");
+    System::Delay(200);
     presets.Init(storage, models);
     daisy_seed.PrintLine("  %u preset(s)", (unsigned)presets.Count());
+    System::Delay(200);
     BuildNamePointers();
+    daisy_seed.PrintLine("Name tables ready.");
+    System::Delay(200);
 
     if (presets.Count() > 0)
     {
         daisy_seed.PrintLine("Loading preset 0...");
+        System::Delay(200);
         presets.Apply(audio_engine, storage, models,
                       hw::AUDIO_SAMPLE_RATE, hw::AUDIO_BLOCK_SIZE);
+        if constexpr (kDisableIrForTiming)
+            delete audio_engine.SwapIR(nullptr);
+        daisy_seed.PrintLine("Preset 0 loaded.");
+        if constexpr (kDisableIrForTiming)
+            daisy_seed.PrintLine("IR disabled for NAM+EQ timing probe.");
+        System::Delay(200);
     }
 
     // --- Controls ------------------------------------------------------------
+    daisy_seed.PrintLine("Init controls...");
+    System::Delay(200);
     controls.Init();
+    daisy_seed.PrintLine("Controls ready.");
+    System::Delay(200);
 
     // --- Display -------------------------------------------------------------
-    daisy_seed.PrintLine("Init display...");
-    ui.Init();
-    PushPerformanceScreen();
-    ui.Update(); // first frame (blocking)
-    daisy_seed.PrintLine("First frame pushed.");
+    if constexpr (kDisplayEnabled)
+    {
+        daisy_seed.PrintLine("Init display...");
+        ui.Init();
+        PushPerformanceScreen();
+        ui.Update(); // first frame (blocking)
+        daisy_seed.PrintLine("First frame pushed.");
+    }
+    else
+    {
+        daisy_seed.PrintLine("Display disabled for audio isolation test.");
+    }
 
     // --- Audio ---------------------------------------------------------------
+    // Without display initialization the firmware reaches StartAudio before
+    // USB CDC has finished enumerating. Give the host time to create the tty
+    // so overload diagnostics remain observable if DSP later starves main().
+    daisy_seed.PrintLine("Waiting 3 seconds for USB before audio start...");
+    System::Delay(3000);
     daisy_seed.SetAudioBlockSize(hw::AUDIO_BLOCK_SIZE);
     daisy_seed.SetAudioSampleRate(SaiHandle::Config::SampleRate::SAI_48KHZ);
     daisy_seed.StartAudio(AudioCallback);
-    daisy_seed.PrintLine("Audio started.");
+    if constexpr (kAudioDiagMode == 2)
+        daisy_seed.PrintLine("Audio started: 440/880 Hz diagnostic beep pattern.");
+    else if constexpr (kAudioDiagMode == 1)
+        daisy_seed.PrintLine("Audio started: input passthrough diagnostic.");
+    else if constexpr (kAudioDiagMode == 3)
+        daisy_seed.PrintLine("Audio started: one-shot full DSP timing probe.");
+    else
+        daisy_seed.PrintLine("Audio started: full NAM DSP.");
 
     // --- Main loop -----------------------------------------------------------
     uint32_t last_diag_ms = System::GetNow();
@@ -444,12 +546,14 @@ int main()
                     if (f < 0) f = 0;
                     if (f > 7) f = 7;
                     edit_state.field = static_cast<uint8_t>(f);
-                    ui.ShowEdit(edit_state);
+                    if constexpr (kDisplayEnabled)
+                        ui.ShowEdit(edit_state);
                 }
                 if (ev.enc1_click)
                 {
                     edit_state.editing = true;
-                    ui.ShowEdit(edit_state);
+                    if constexpr (kDisplayEnabled)
+                        ui.ShowEdit(edit_state);
                 }
             }
             else
@@ -518,12 +622,14 @@ int main()
                         break;
                     }
                     }
-                    ui.ShowEdit(edit_state);
+                    if constexpr (kDisplayEnabled)
+                        ui.ShowEdit(edit_state);
                 }
                 if (ev.enc1_click)
                 {
                     edit_state.editing = false;
-                    ui.ShowEdit(edit_state);
+                    if constexpr (kDisplayEnabled)
+                        ui.ShowEdit(edit_state);
                 }
             }
 
@@ -580,7 +686,8 @@ int main()
         }
 
         // Display update (fps-capped, non-blocking DMA).
-        ui.Update();
+        if constexpr (kDisplayEnabled)
+            ui.Update();
 
         // Once-per-second diagnostics + forced display refresh.
         uint32_t now = System::GetNow();
@@ -588,9 +695,12 @@ int main()
         {
             float cb_ms = static_cast<float>(cb_max_cyc) / 480000.0f;
             audio_overload = (cb_max_cyc > kCbOverloadCyc);
-            daisy_seed.PrintLine("cb=%lu  peak=%.3fms%s  gain=%.2f  vol=%.2f  bypass=%s",
+            float input_peak = diag_input_peak;
+            diag_input_peak = 0.0f;
+            daisy_seed.PrintLine("cb=%lu  cpu_peak=%.3fms%s  in_peak=%.4f  gain=%.2f  vol=%.2f  bypass=%s",
                 (unsigned long)cb_count, cb_ms,
                 audio_overload ? "  !OVERLOAD" : "",
+                (double)input_peak,
                 (double)audio_engine.GetInputGain(),
                 (double)audio_engine.GetOutputVol(),
                 audio_engine.GetBypass() ? "Y" : "N");

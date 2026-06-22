@@ -46,9 +46,6 @@ void AudioEngine::Process(const float* in, float* out, size_t frames)
     if (ir)
         ir->Process(scratch_out_, scratch_out_, frames);
 
-    // Tone EQ stage (post-IR).
-    eq_.Process(scratch_out_, frames);
-
     // Apply output volume and write result.
     for (size_t i = 0; i < frames; ++i)
         out[i] = scratch_out_[i] * vol;

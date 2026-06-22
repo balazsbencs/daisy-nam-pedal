@@ -3,3 +3,6 @@
 /nam-binary-loader/build/
 .idea
 data_image.bin
+.superpowers/
+__pycache__/
+*.pyc

@@ -1,7 +1,7 @@
 // Ui.h — display coordinator for the NAM pedal platform.
 //
 // Owns the St7789Driver and wraps DisplayRenderer. Renders into the SDRAM
-// framebuffer and DMA-pushes to the panel at most kFps times per second.
+// framebuffer and cooperatively pushes rows at most kFps frames per second.
 //
 // Three screens:
 //   Performance — active during playing (preset name, amp, IR, level bars, bypass)
@@ -9,7 +9,7 @@
 //   Edit        — field editor for the highlighted preset (entered via encoder long-press)
 //
 // Call Update() every main-loop iteration; it only pushes a new frame when dirty
-// AND the previous DMA transfer has finished AND the fps budget allows it.
+// AND the previous transfer has finished AND the fps budget allows it.
 
 #pragma once
 #include "data_format.h"
@@ -90,7 +90,7 @@ public:
     // Call every main-loop iteration.
     void Update();
 
-    // True while a DMA frame transfer is in flight.
+    // True while a cooperative frame transfer is in progress.
     bool IsBusy() const { return driver_.IsBusy(); }
 
 private:

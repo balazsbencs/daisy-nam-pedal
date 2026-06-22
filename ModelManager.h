@@ -1,7 +1,7 @@
 // ModelManager.h — enumerate NAM model entries from QSPI, load on demand.
 //
 // Stage-then-swap pattern: Load() reads the .namb blob from memory-mapped QSPI
-// (zero-copy), constructs the NAM DSP object and prewarms it, then atomically
+// (zero-copy), constructs and resets the NAM DSP object, then atomically
 // swaps it into AudioEngine. The old model is disposed in the main loop.
 // Audio keeps running on the previous model during the ~10-15 ms load.
 
@@ -25,7 +25,7 @@ public:
     // Name of entry i (nullptr if out of range).
     const char* Name(uint8_t i) const;
 
-    // Load model at index i into AudioEngine. Blocking (~10-15 ms).
+    // Load model at index i into AudioEngine without synchronous prewarming.
     // Returns true on success.
     bool Load(uint8_t i, AudioEngine& engine, float sample_rate, size_t block_size);
 

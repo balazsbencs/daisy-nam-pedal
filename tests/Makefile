@@ -17,11 +17,11 @@ CXXFLAGS = -std=c++17 -O0 -g \
 QSPI_SRCS      = ../QspiStorage.cpp
 EQ_SRCS        = ../Eq3.cpp
 AUDIO_SRCS     = ../AudioEngine.cpp ../Eq3.cpp
-IR_SRCS        = ../IRLoader.cpp
+IR_SRCS        = ../IRLoader.cpp ../PartitionedConvolver.cpp ../RealFft128.cpp
 PRESET_SRCS    = ../PresetManager.cpp
 MODEL_STUB_SRC = stub_impls/ModelManager_stub.cpp
 
-BINARIES = test_data_format test_qspi_storage test_preset_manager test_ir_loader test_eq3 test_audio_engine test_quad_encoder test_meter_fill
+BINARIES = test_data_format test_qspi_storage test_preset_manager test_ir_loader test_eq3 test_audio_engine test_quad_encoder test_meter_fill test_real_fft_128 test_partitioned_convolver test_display_transfer
 
 .PHONY: all run clean
 
@@ -64,6 +64,15 @@ test_quad_encoder: test_quad_encoder.cpp ../quad_decode.h
 test_meter_fill: test_meter_fill.cpp ../display/meter_fill.h
 	$(CXX) $(CXXFLAGS) $< -o $@
 
+test_real_fft_128: test_real_fft_128.cpp ../RealFft128.cpp
+	$(CXX) $(CXXFLAGS) $^ -o $@
+
+test_partitioned_convolver: test_partitioned_convolver.cpp ../PartitionedConvolver.cpp ../RealFft128.cpp
+	$(CXX) $(CXXFLAGS) $^ -o $@
+
+test_display_transfer: test_display_transfer.cpp
+	$(CXX) $(CXXFLAGS) $< -o $@
+
 run: all
 	@echo "=== TEST-01: data_format ==="
 	./test_data_format
@@ -81,6 +90,12 @@ run: all
 	./test_quad_encoder
 	@echo "=== test_meter_fill ==="
 	./test_meter_fill
+	@echo "=== test_real_fft_128 ==="
+	./test_real_fft_128
+	@echo "=== test_partitioned_convolver ==="
+	./test_partitioned_convolver
+	@echo "=== test_display_transfer ==="
+	./test_display_transfer
 	@echo "=== TEST-11: tools (Python) ==="
 	python3 test_tools.py
 

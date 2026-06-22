@@ -10,7 +10,7 @@ int main()
     eng.SetBypass(false);
     eng.SetInputGain(1.0f);
     eng.SetOutputVol(1.0f);
-    // No model, no IR -> EQ is the only processing. Boost mid +12 dB @ 750 Hz.
+    // EQ controls remain writable, but EQ is omitted from the realtime path.
     eng.SetEqBand(Eq3::Band::Mid, 12.0f, 750.0f);
 
     const float fs = 48000.0f; const int N = 48; const int blocks = 200;
@@ -22,6 +22,6 @@ int main()
         if (blk >= 100) for (int i=0;i<N;++i){ in_sq+=in[i]*in[i]; out_sq+=out[i]*out[i]; }
     }
     float g = 10.0f * std::log10(out_sq / in_sq);
-    CHECK(g > 9.0f);                 // ~+12 dB, allow margin
+    CHECK(std::fabs(g) < 0.1f);
     return test_summary("test_audio_engine");
 }

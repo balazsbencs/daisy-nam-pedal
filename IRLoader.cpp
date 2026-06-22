@@ -11,10 +11,8 @@ bool FirConvolver::Init(const float* ir, size_t tap_count, const char* name)
     if (!ir || tap_count == 0 || tap_count > kMaxTaps)
         return false;
 
-    // DaisySP FIR: SetIR(coefs, len, reverse=true)
-    // reverse=true because DaisySP expects the IR in convolution order.
-    fir_.SetIR(ir, tap_count, /*reverse=*/true);
-    fir_.Reset();
+    if(!convolver_.Init(ir, tap_count))
+        return false;
 
     strncpy(name_, name ? name : "IR", sizeof(name_) - 1);
     name_[sizeof(name_) - 1] = '\0';
@@ -31,7 +29,7 @@ void FirConvolver::Process(const float* buf_in, float* buf_out, size_t frames)
                 buf_out[i] = buf_in[i];
         return;
     }
-    fir_.ProcessBlock(const_cast<float*>(buf_in), buf_out, frames);
+    convolver_.Process(buf_in, buf_out, frames);
 }
 
 // ---------------------------------------------------------------------------

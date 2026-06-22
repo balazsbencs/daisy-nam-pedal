@@ -132,60 +132,29 @@ void St7789Driver::SetWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
 }
 
 // ---------------------------------------------------------------------------
-// StartDmaTransfer — sets up chunked DMA and fires the first chunk
+// PushFrame / Service — cooperative full-frame send, one row at a time.
 // ---------------------------------------------------------------------------
 
-void St7789Driver::StartDmaTransfer(const uint16_t* buf, uint32_t len,
-                                    DoneCallback cb, void* ctx) {
-    if (!buf) return;
-
-    done_cb_  = cb;
-    done_ctx_ = ctx;
-    dma_busy_ = true;
+void St7789Driver::PushFrame(const uint16_t* buf, uint32_t len_bytes) {
+    if (!transfer_.Start(buf, len_bytes)) return;
 
     SetWindow(0, 0, kMaxX, kMaxY);
 
-    // RAMWR: command mode (DC low), send 0x2C, then stay in data mode (DC high)
-    // CS stays asserted (low) until all chunks have been sent.
     pin_cs_.Write(false);
     pin_dc_.Write(false);
     uint8_t ramwr = 0x2C;
     spi_.BlockingTransmit(&ramwr, 1);
     pin_dc_.Write(true);
-
-    // Send first chunk; continuation is handled in DmaChunkDoneISR.
-    auto* ptr             = reinterpret_cast<uint8_t*>(const_cast<uint16_t*>(buf));
-    const uint32_t chunk  = (len > kMaxChunk) ? kMaxChunk : len;
-    dma_next_ptr_         = ptr + chunk;
-    dma_remaining_        = len - chunk;
-
-    spi_.DmaTransmit(ptr, chunk, nullptr, DmaChunkDoneISR, this);
 }
 
-// ---------------------------------------------------------------------------
-// DmaChunkDoneISR — chains the next chunk or finalises the transfer
-// ---------------------------------------------------------------------------
+void St7789Driver::Service() {
+    if (!transfer_.IsBusy()) return;
 
-void St7789Driver::DmaChunkDoneISR(void* ctx, SpiHandle::Result /*result*/) {
-    St7789Driver* self = static_cast<St7789Driver*>(ctx);
-
-    if (self->dma_remaining_ > 0) {
-        // More data to send — kick the next chunk from within the ISR.
-        const uint32_t chunk  = (self->dma_remaining_ > kMaxChunk)
-                                    ? kMaxChunk : self->dma_remaining_;
-        auto* ptr             = const_cast<uint8_t*>(self->dma_next_ptr_);
-        self->dma_next_ptr_  += chunk;
-        self->dma_remaining_ -= chunk;
-
-        self->spi_.DmaTransmit(ptr, chunk, nullptr, DmaChunkDoneISR, self);
-    } else {
-        // All chunks done — deassert CS, mark idle, then notify caller.
-        self->pin_cs_.Write(true);
-        self->dma_busy_ = false;
-        if (self->done_cb_) {
-            self->done_cb_(self->done_ctx_);
-        }
-    }
+    static constexpr uint32_t kRowBytes = kDisplayWidth * 2u;
+    const auto chunk = transfer_.CurrentChunk(kRowBytes);
+    spi_.BlockingTransmit(const_cast<uint8_t*>(chunk.data), chunk.size);
+    transfer_.Advance(chunk.size);
+    if (!transfer_.IsBusy()) pin_cs_.Write(true);
 }
 
 // ---------------------------------------------------------------------------

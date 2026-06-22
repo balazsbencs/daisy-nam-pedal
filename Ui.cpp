@@ -80,9 +80,10 @@ void Ui::ShowEdit(const EditState& s)
 
 void Ui::Update()
 {
-    if (!dirty_)
-        return;
+    driver_.Service();
     if (driver_.IsBusy())
+        return;
+    if (!dirty_)
         return;
 
     uint32_t now = System::GetNow();
@@ -348,7 +349,7 @@ void Ui::RenderEdit()
 }
 
 // ---------------------------------------------------------------------------
-// PushFrame — non-blocking DMA to the panel
+// PushFrame — starts a cooperative row-by-row panel transfer
 // ---------------------------------------------------------------------------
 
 void Ui::PushFrame()

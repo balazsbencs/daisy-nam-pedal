@@ -3,14 +3,13 @@
 // IIRConvolver is the interface AudioEngine uses — it never knows whether it's
 // talking to a time-domain FIR or a future FFT/partitioned convolver.
 //
-// FirConvolver: wraps DaisySP's FIR<> (time-domain, CMSIS arm_fir_f32 on ARM).
-//   Max taps: kMaxTaps (512). Good to ~0.05 ms per block alongside NAM.
+// FirConvolver: complete-IR partitioned FFT convolution with one block latency.
 //
 // LoadIrFromQspi: reads float32-LE taps directly from a QSPI blob pointer
 //   (zero-copy from flash) and builds a FirConvolver. Returns nullptr on error.
 
 #pragma once
-#include "Filters/fir.h"   // DaisySP — header-only, found via -I../../DaisySP/Source
+#include "PartitionedConvolver.h"
 #include "QspiStorage.h"
 #include <stddef.h>
 #include <stdint.h>
@@ -29,7 +28,7 @@ public:
 };
 
 // ---------------------------------------------------------------------------
-// FirConvolver — time-domain FIR, ≤kMaxTaps taps
+// FirConvolver — partitioned FFT convolution, <= kMaxTaps taps
 // ---------------------------------------------------------------------------
 class FirConvolver : public IIRConvolver
 {
@@ -41,12 +40,12 @@ public:
     bool Init(const float* ir, size_t tap_count, const char* name);
 
     void Process(const float* buf_in, float* buf_out, size_t frames) override;
+    void Reset() { convolver_.Reset(); }
 
     const char* Name() const override { return name_; }
 
 private:
-    // DaisySP FIR with internal storage for up to kMaxTaps × kMaxBlock.
-    daisysp::FIR<kMaxTaps, kMaxBlock> fir_;
+    PartitionedConvolver convolver_;
     char name_[32] = {};
     bool ready_    = false;
 };

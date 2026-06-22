@@ -11,6 +11,8 @@ CPP_SOURCES = \
   QspiStorage.cpp \
   AudioEngine.cpp \
   Eq3.cpp \
+  RealFft128.cpp \
+  PartitionedConvolver.cpp \
   QuadEncoder.cpp \
   IRLoader.cpp \
   ModelManager.cpp \
@@ -62,11 +64,21 @@ C_DEFS = \
   -DNAM_USE_INLINE_GEMM \
   -DNAM_ENABLE_A2_FAST \
   -D__ARM_ARCH_7EM__ \
-  -DUSE_ARM_DSP
+  -DUSE_ARM_DSP \
+  -DARM_DSP_CONFIG_TABLES \
+  -DARM_FFT_ALLOW_TABLES \
+  -DARM_TABLE_TWIDDLECOEF_F32_64 \
+  -DARM_TABLE_BITREVIDX_FXT_64 \
+  -DARM_TABLE_TWIDDLECOEF_RFFT_F32_128
 
 C_SOURCES += \
-  $(LIBDAISY_DIR)/Drivers/CMSIS-DSP/Source/FilteringFunctions/arm_fir_f32.c \
-  $(LIBDAISY_DIR)/Drivers/CMSIS-DSP/Source/FilteringFunctions/arm_fir_init_f32.c
+  $(LIBDAISY_DIR)/Drivers/CMSIS-DSP/Source/CommonTables/arm_common_tables.c \
+  $(LIBDAISY_DIR)/Drivers/CMSIS-DSP/Source/TransformFunctions/arm_bitreversal2.c \
+  $(LIBDAISY_DIR)/Drivers/CMSIS-DSP/Source/TransformFunctions/arm_cfft_f32.c \
+  $(LIBDAISY_DIR)/Drivers/CMSIS-DSP/Source/TransformFunctions/arm_cfft_init_f32.c \
+  $(LIBDAISY_DIR)/Drivers/CMSIS-DSP/Source/TransformFunctions/arm_cfft_radix8_f32.c \
+  $(LIBDAISY_DIR)/Drivers/CMSIS-DSP/Source/TransformFunctions/arm_rfft_fast_f32.c \
+  $(LIBDAISY_DIR)/Drivers/CMSIS-DSP/Source/TransformFunctions/arm_rfft_fast_init_f32.c
 
 # Pull in the libDaisy master build rules (also picks up DAISYSP_DIR).
 include $(SYSTEM_FILES_DIR)/Makefile

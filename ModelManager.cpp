@@ -42,8 +42,11 @@ bool ModelManager::Load(uint8_t i, AudioEngine& engine,
 
     if (!model) return false;
 
-    model->ResetAndPrewarm(static_cast<double>(sample_rate),
-                           static_cast<int>(block_size));
+    // A2 requests 6,346 prewarm samples. Running 133 neural blocks
+    // synchronously stalls the embedded UI/USB during every model load.
+    // Zero-initialized state is valid; let it settle during live processing.
+    model->SetPrewarmOnReset(false);
+    model->Reset(static_cast<double>(sample_rate), static_cast<int>(block_size));
 
     // Swap into engine — old model returned for disposal here (main loop safe).
     auto old = engine.SwapModel(std::move(model));
