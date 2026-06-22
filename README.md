@@ -135,4 +135,9 @@ Key connections (Daisy Seed pins):
 
 NeuralAmpModelerCore's main branch targets desktop (uses `<filesystem>`, `<mutex>`, JSON). The embedded build excludes those paths via `#ifdef HOST_BUILD` guards added to the submodule, and compiles only the binary NAMB load path. The `NamEmbeddedStubs.cpp` file provides minimal shims for `create_dsp()` and `verify_config_version()`.
 
-DaisySP's FIR filter runs with CMSIS-DSP hardware acceleration (`USE_ARM_DSP`). The two required CMSIS-DSP source files (`arm_fir_f32.c`, `arm_fir_init_f32.c`) are compiled directly from the libDaisy submodule — no separate library build step needed.
+The IR stage uses this repository's partitioned FFT convolver. Its required
+CMSIS-DSP transform sources are compiled directly from the libDaisy submodule;
+the current realtime path does not use DaisySP's direct FIR implementation.
+
+For the rationale, validation requirements, and retirement criteria for every
+maintained submodule adaptation, see [Maintained Submodule Changes](docs/SUBMODULE_CHANGES.md).
