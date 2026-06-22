@@ -33,9 +33,10 @@ Affected files:
 - `NAM/wavenet/model.cpp`
 
 The patch removes unused desktop file headers and places filesystem overloads,
-JSON configuration parsing, Slimmable support, and desktop parser registration
-behind `HOST_BUILD`. These paths depend on desktop facilities that firmware does
-not need.
+JSON configuration parsing, Slimmable support, desktop parser registration, and
+thread-local prewarm state behind `HOST_BUILD`. These paths depend on desktop
+facilities that firmware does not need; in particular, the bare-metal ARM runtime
+does not provide the thread-local storage hook used by `thread_local`.
 
 The typed `get_dsp(dspData&, DspLoadOptions)` API remains available because the
 embedded integration constructs a DSP after the binary loader produces typed
