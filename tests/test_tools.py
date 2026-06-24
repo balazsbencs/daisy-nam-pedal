@@ -2,7 +2,7 @@
 TEST-11: tools/build_data_image.py packer round-trip.
 
 Verifies that:
-- Struct sizes match: NamDataHeader=8, NamDataEntry=48, NamPreset=74
+- Struct sizes match: NamDataHeader=8, NamDataEntry=48, NamPreset=138
 - A synthetic data image parses correctly: magic, version, entry count
 - NamPreset fields round-trip through pack/unpack without corruption
 - Blob offsets are 4 KB-aligned
@@ -29,7 +29,7 @@ ENTRY_FMT   = "<B31sIIII11x"  # type(1) name(31) offset(4) length(4) sr(4) reser
 # then offset=uint32 at offset 32 → 32%4==0 ok, no padding
 # so total = 1+31+4+4+4+4 = 48. Exact. No implicit padding.
 ENTRY_FMT   = "<B31sIIII"   # = 1+31+4+4+4+4 = 48 bytes
-PRESET_FMT  = "<31s31sffB3x6f"  # = 31+31+4+4+1+3+24 = 98 bytes
+PRESET_FMT  = "<31s31sffB3x6f3B1x9f"  # = 31+31+4+4+1+3+24+3+1+36 = 138 bytes
 
 SECTOR_SIZE = 4096
 
@@ -42,12 +42,23 @@ def pack_entry(entry_type, name, offset, length, samplerate=0):
 
 def pack_preset(model_name, ir_name, input_gain, output_volume, bypass,
                 eq_bass_gain=0.0, eq_mid_gain=0.0, eq_treble_gain=0.0,
-                eq_bass_freq=100.0, eq_mid_freq=750.0, eq_treble_freq=4000.0):
+                eq_bass_freq=100.0, eq_mid_freq=750.0, eq_treble_freq=4000.0,
+                noise_gate_enabled=0, compressor_enabled=0, delay_enabled=0,
+                noise_gate_threshold_db=-70.0,
+                compressor_threshold_db=-18.0, compressor_ratio=2.0,
+                compressor_attack_ms=10.0, compressor_release_ms=100.0,
+                delay_time_ms=350.0, delay_repeats=0.25,
+                delay_mix=0.18, delay_tone=0.5):
     mn = model_name.encode()[:NAM_DATA_NAME_LEN-1].ljust(NAM_DATA_NAME_LEN, b'\x00')
     ir = ir_name.encode()[:NAM_DATA_NAME_LEN-1].ljust(NAM_DATA_NAME_LEN, b'\x00')
     return struct.pack(PRESET_FMT, mn, ir, input_gain, output_volume, bypass,
                        eq_bass_gain, eq_mid_gain, eq_treble_gain,
-                       eq_bass_freq, eq_mid_freq, eq_treble_freq)
+                       eq_bass_freq, eq_mid_freq, eq_treble_freq,
+                       noise_gate_enabled, compressor_enabled, delay_enabled,
+                       noise_gate_threshold_db,
+                       compressor_threshold_db, compressor_ratio,
+                       compressor_attack_ms, compressor_release_ms,
+                       delay_time_ms, delay_repeats, delay_mix, delay_tone)
 
 
 def build_test_image(blobs):
@@ -90,7 +101,7 @@ def build_test_image(blobs):
 def test_struct_sizes():
     assert struct.calcsize(HEADER_FMT) == 8,  f"Header size {struct.calcsize(HEADER_FMT)} != 8"
     assert struct.calcsize(ENTRY_FMT)  == 48, f"Entry size {struct.calcsize(ENTRY_FMT)} != 48"
-    assert struct.calcsize(PRESET_FMT) == 98, f"Preset size {struct.calcsize(PRESET_FMT)} != 98"
+    assert struct.calcsize(PRESET_FMT) == 138, f"Preset size {struct.calcsize(PRESET_FMT)} != 138"
     print("PASS  struct sizes")
 
 
@@ -130,7 +141,7 @@ def test_round_trip():
     # Parse preset blob
     preset_offset = entries[2][2]
     preset_len    = entries[2][3]
-    assert preset_len == 98
+    assert preset_len == 138
     fields = struct.unpack_from(PRESET_FMT, image, preset_offset)
     mn, ir, gain, vol, bypass = fields[0], fields[1], fields[2], fields[3], fields[4]
     assert mn.rstrip(b'\x00').decode() == "Plexi"
@@ -147,7 +158,7 @@ def test_round_trip():
 def test_preset_field_offsets():
     # model_name at byte 0, ir_name at byte 31, input_gain at byte 62
     raw = pack_preset("AAAA", "BBBB", 0.5, 0.25, 1)
-    assert len(raw) == 98
+    assert len(raw) == 138
     assert raw[0:4]  == b"AAAA", f"model_name bad: {raw[0:4]}"
     assert raw[31:35] == b"BBBB", f"ir_name bad: {raw[31:35]}"
     gain_bytes = raw[62:66]
@@ -162,14 +173,14 @@ def test_preset_field_offsets():
 
 
 def test_eq_fields():
-    # Import the real packer tool and verify its PRESET_FMT is 98 bytes.
+    # Import the real packer tool and verify its PRESET_FMT is 138 bytes.
     import importlib.util, os as _os
     tool_path = _os.path.join(_os.path.dirname(__file__), "..", "tools", "build_data_image.py")
     spec = importlib.util.spec_from_file_location("build_data_image", tool_path)
     mod  = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    assert struct.calcsize(mod.PRESET_FMT) == 98, \
-        f"build_data_image.PRESET_FMT must be 98 bytes, got {struct.calcsize(mod.PRESET_FMT)}"
+    assert struct.calcsize(mod.PRESET_FMT) == 138, \
+        f"build_data_image.PRESET_FMT must be 138 bytes, got {struct.calcsize(mod.PRESET_FMT)}"
     # Round-trip with EQ fields via the tool's pack_preset().
     blob = mod.pack_preset({
         "model": "amp", "ir": "cab",
@@ -177,10 +188,15 @@ def test_eq_fields():
         "eq": {"bass_gain": -3.0, "mid_gain": 2.5, "treble_gain": 4.0,
                "bass_freq": 120.0, "mid_freq": 800.0, "treble_freq": 3500.0},
     })
-    assert len(blob) == 98, f"pack_preset output must be 98 bytes, got {len(blob)}"
+    assert len(blob) == 138, f"pack_preset output must be 138 bytes, got {len(blob)}"
     fields = struct.unpack(mod.PRESET_FMT, blob)
     assert abs(fields[5] - (-3.0)) < 1e-6,  f"eq_bass_gain bad: {fields[5]}"
     assert abs(fields[10] - 3500.0) < 1e-3, f"eq_treble_freq bad: {fields[10]}"
+    assert blob[98] == 0, f"noise_gate_enabled bad: {blob[98]}"
+    assert blob[99] == 0, f"compressor_enabled bad: {blob[99]}"
+    assert blob[100] == 0, f"delay_enabled bad: {blob[100]}"
+    delay_mix, = struct.unpack_from("<f", blob, 130)
+    assert abs(delay_mix - 0.18) < 1e-6, f"delay_mix bad: {delay_mix}"
     print("PASS  eq_fields")
 
 

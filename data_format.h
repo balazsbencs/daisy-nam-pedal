@@ -82,9 +82,9 @@ typedef struct
 // by name so it stays valid regardless of directory ordering. Levels in [0,1].
 //
 // Packed to eliminate implicit compiler padding between the char[] fields and the
-// first float. Current packers use "<31s31sffB3x6f" for 98 bytes.
+// first float. Current packers use "<31s31sffB3x6f3B1x9f" for 138 bytes.
 // Firmware still accepts older 74-byte blobs by zero-filling the appended EQ
-// fields in PresetManager before applying default EQ frequencies at runtime.
+// and effects fields in PresetManager before applying defaults at runtime.
 // static_assert below enforces the current match at compile time.
 typedef struct __attribute__((packed))
 {
@@ -101,6 +101,20 @@ typedef struct __attribute__((packed))
     float   eq_bass_freq;                  // 86..89   Hz  (0 = use default)
     float   eq_mid_freq;                   // 90..93   Hz
     float   eq_treble_freq;                // 94..97   Hz
+    // --- Pre/post effects block (appended; older blobs lack this) ---
+    uint8_t noise_gate_enabled;            // 98       0 = bypassed, 1 = active
+    uint8_t compressor_enabled;            // 99       0 = bypassed, 1 = active
+    uint8_t delay_enabled;                 // 100      0 = bypassed, 1 = active
+    uint8_t fx_pad;                        // 101      explicit padding
+    float   noise_gate_threshold_db;       // 102..105 dBFS [-90,-20]
+    float   compressor_threshold_db;       // 106..109 dBFS [-60,0]
+    float   compressor_ratio;              // 110..113 [1,20]
+    float   compressor_attack_ms;          // 114..117 [0.1,200]
+    float   compressor_release_ms;         // 118..121 [5,1000]
+    float   delay_time_ms;                 // 122..125 [1,750]
+    float   delay_repeats;                 // 126..129 [0,0.95]
+    float   delay_mix;                     // 130..133 [0,1]
+    float   delay_tone;                    // 134..137 [0,1]
 } NamPreset;
 
 #ifdef __cplusplus
@@ -110,7 +124,7 @@ typedef struct __attribute__((packed))
 #ifdef __cplusplus
 static_assert(sizeof(NamDataHeader) == 8,  "NamDataHeader size mismatch");
 static_assert(sizeof(NamDataEntry)  == 48, "NamDataEntry size mismatch");
-static_assert(sizeof(NamPreset)     == 98, "NamPreset size mismatch — check packing vs Python PRESET_FMT");
+static_assert(sizeof(NamPreset)     == 138, "NamPreset size mismatch — check packing vs Python/Rust packers");
 #endif
 
 #endif // NAM_DATA_FORMAT_H

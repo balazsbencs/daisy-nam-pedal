@@ -39,7 +39,7 @@ ENTRY_PRESET = 2
 
 HEADER_FMT = "<IHH"  # magic, version, count  -> 8 bytes
 ENTRY_FMT = "<B31sIIII"  # type, name, offset, length, samplerate, reserved -> 48
-PRESET_FMT = "<31s31sffB3x6f"  # model, ir, in_gain, out_vol, bypass, pad, 6×EQ -> 98 bytes
+PRESET_FMT = "<31s31sffB3x6f3B1x9f"  # model, ir, gains, bypass, EQ, FX -> 138 bytes
 
 assert struct.calcsize(HEADER_FMT) == 8
 assert struct.calcsize(ENTRY_FMT) == 48
@@ -153,6 +153,9 @@ def gather_blobs(src_dir, max_taps):
 
 def pack_preset(p):
     eq = p.get("eq", {})
+    gate = p.get("noise_gate", {})
+    comp = p.get("compressor", {})
+    delay = p.get("delay", {})
     return struct.pack(
         PRESET_FMT,
         encode_name(p.get("model", "")),
@@ -166,6 +169,18 @@ def pack_preset(p):
         float(eq.get("bass_freq", 100.0)),
         float(eq.get("mid_freq", 750.0)),
         float(eq.get("treble_freq", 4000.0)),
+        1 if gate.get("enabled", False) else 0,
+        1 if comp.get("enabled", False) else 0,
+        1 if delay.get("enabled", False) else 0,
+        float(gate.get("threshold_db", -70.0)),
+        float(comp.get("threshold_db", -18.0)),
+        float(comp.get("ratio", 2.0)),
+        float(comp.get("attack_ms", 10.0)),
+        float(comp.get("release_ms", 100.0)),
+        float(delay.get("time_ms", 350.0)),
+        float(delay.get("repeats", 0.25)),
+        float(delay.get("mix", 0.18)),
+        float(delay.get("tone", 0.5)),
     )
 
 
