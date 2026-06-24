@@ -11,6 +11,7 @@
 #pragma once
 #include "Eq3.h"
 #include "NAM/dsp.h"
+#include "PedalEffects.h"
 #include <atomic>
 #include <memory>
 #include <stddef.h>
@@ -47,6 +48,23 @@ public:
     float GetEqGain(Eq3::Band b) const { return eq_.GetGainDb(b); }
     float GetEqFreq(Eq3::Band b) const { return eq_.GetFreq(b); }
 
+    void SetNoiseGate(bool enabled, float threshold_db);
+    void SetCompressor(bool enabled, float threshold_db, float ratio, float attack_ms, float release_ms);
+    void SetDelay(bool enabled, float time_ms, float repeats, float mix, float tone);
+
+    bool  GetNoiseGateEnabled() const { return gate_.Enabled(); }
+    float GetNoiseGateThresholdDb() const { return gate_.ThresholdDb(); }
+    bool  GetCompressorEnabled() const { return compressor_.Enabled(); }
+    float GetCompressorThresholdDb() const { return compressor_.ThresholdDb(); }
+    float GetCompressorRatio() const { return compressor_.Ratio(); }
+    float GetCompressorAttackMs() const { return compressor_.AttackMs(); }
+    float GetCompressorReleaseMs() const { return compressor_.ReleaseMs(); }
+    bool  GetDelayEnabled() const { return delay_.Enabled(); }
+    float GetDelayTimeMs() const { return delay_.TimeMs(); }
+    float GetDelayRepeats() const { return delay_.Repeats(); }
+    float GetDelayMix() const { return delay_.Mix(); }
+    float GetDelayTone() const { return delay_.Tone(); }
+
     float GetInputGain()  const { return input_gain_.load(); }
     float GetOutputVol()  const { return output_vol_.load(); }
     bool  GetBypass()     const { return bypass_.load();     }
@@ -68,6 +86,9 @@ private:
     std::atomic<bool>  bypass_{true};
 
     Eq3 eq_;
+    NoiseGate gate_;
+    Compressor compressor_;
+    DelayLine delay_;
 
     size_t block_size_   = 48;
     float  sample_rate_  = 48000.0f;

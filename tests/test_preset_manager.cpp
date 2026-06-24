@@ -45,6 +45,23 @@ static std::vector<uint8_t> make_legacy_preset_blob(const char* mname, const cha
     return buf;
 }
 
+static std::vector<uint8_t> make_eq_legacy_preset_blob()
+{
+    NamPreset p{};
+    p.input_gain = 1.0f;
+    p.output_volume = 0.8f;
+    p.bypass = 0;
+    p.eq_bass_gain = -3.0f;
+    p.eq_mid_gain = 2.0f;
+    p.eq_treble_gain = 4.0f;
+    p.eq_bass_freq = 120.0f;
+    p.eq_mid_freq = 800.0f;
+    p.eq_treble_freq = 3500.0f;
+    std::vector<uint8_t> buf(98);
+    memcpy(buf.data(), &p, 98);
+    return buf;
+}
+
 // ----- TEST-04 --------------------------------------------------------------
 
 static void test_no_presets_synthesises_per_model()
@@ -274,6 +291,61 @@ static void test_legacy_preset_blob_zero_fills_eq_fields()
     CHECK(std::fabs(p.eq_treble_freq) < 1e-6f);
 }
 
+static void test_98_byte_eq_legacy_keeps_new_effects_bypassed()
+{
+    FakeStorage fs;
+    auto blob = make_eq_legacy_preset_blob();
+    fs.AddEntry(NAM_ENTRY_PRESET, "EQ Legacy", blob.data(), (uint32_t)blob.size());
+    fs.Commit();
+
+    set_fake(fs);
+    QspiStorage storage;
+    storage.Init();
+    ModelManager models;
+    models.Init(storage);
+    PresetManager presets;
+    presets.Init(storage, models);
+
+    const NamPreset& p = presets.ActivePreset();
+    CHECK_EQ(p.noise_gate_enabled, 0u);
+    CHECK_EQ(p.compressor_enabled, 0u);
+    CHECK_EQ(p.delay_enabled, 0u);
+}
+
+static void test_full_effect_preset_loads_and_applies()
+{
+    QspiStorage storage;
+    ModelManager models;
+    AudioEngine engine;
+    engine.Init(48, 48000.0f);
+    PresetManager pm;
+
+    NamPreset p{};
+    p.input_gain = 1.0f;
+    p.output_volume = 0.8f;
+    p.noise_gate_enabled = 1;
+    p.compressor_enabled = 1;
+    p.delay_enabled = 1;
+    p.noise_gate_threshold_db = -55.0f;
+    p.compressor_threshold_db = -20.0f;
+    p.compressor_ratio = 3.0f;
+    p.compressor_attack_ms = 7.0f;
+    p.compressor_release_ms = 120.0f;
+    p.delay_time_ms = 250.0f;
+    p.delay_repeats = 0.4f;
+    p.delay_mix = 0.3f;
+    p.delay_tone = 0.7f;
+
+    pm.ApplyPreset(p, engine, storage, models, 48000.0f, 48);
+
+    CHECK(engine.GetNoiseGateEnabled());
+    CHECK(engine.GetCompressorEnabled());
+    CHECK(engine.GetDelayEnabled());
+    CHECK(std::fabs(engine.GetNoiseGateThresholdDb() - (-55.0f)) < 1e-5f);
+    CHECK(std::fabs(engine.GetCompressorRatio() - 3.0f) < 1e-5f);
+    CHECK(std::fabs(engine.GetDelayMix() - 0.3f) < 1e-5f);
+}
+
 int main()
 {
     test_no_presets_synthesises_per_model();
@@ -284,6 +356,8 @@ int main()
     test_apply_unknown_model_forces_bypass();
     test_preset_entries_load_full_eq_blob();
     test_legacy_preset_blob_zero_fills_eq_fields();
+    test_98_byte_eq_legacy_keeps_new_effects_bypassed();
+    test_full_effect_preset_loads_and_applies();
     test_apply_eq_forwarded();
     test_apply_eq_default_freq_fallback();
     return test_summary("preset_manager");

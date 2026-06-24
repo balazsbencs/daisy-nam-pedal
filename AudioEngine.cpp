@@ -6,6 +6,9 @@ void AudioEngine::Init(size_t block_size, float sample_rate)
     block_size_  = block_size;
     sample_rate_ = sample_rate;
     eq_.Reset(sample_rate);
+    gate_.Init(sample_rate);
+    compressor_.Init(sample_rate);
+    delay_.Init(sample_rate);
 }
 
 void AudioEngine::Process(const float* in, float* out, size_t frames)
@@ -70,4 +73,22 @@ IIRConvolver* AudioEngine::SwapIR(IIRConvolver* next)
     ir_owner_         = next;
     active_ir_.store(next);  // atomic
     return old;
+}
+
+void AudioEngine::SetNoiseGate(bool enabled, float threshold_db)
+{
+    gate_.SetThresholdDb(threshold_db);
+    gate_.SetEnabled(enabled);
+}
+
+void AudioEngine::SetCompressor(bool enabled, float threshold_db, float ratio, float attack_ms, float release_ms)
+{
+    compressor_.SetParams(threshold_db, ratio, attack_ms, release_ms);
+    compressor_.SetEnabled(enabled);
+}
+
+void AudioEngine::SetDelay(bool enabled, float time_ms, float repeats, float mix, float tone)
+{
+    delay_.SetParams(time_ms, repeats, mix, tone);
+    delay_.SetEnabled(enabled);
 }

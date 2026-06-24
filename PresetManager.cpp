@@ -6,6 +6,8 @@ static constexpr uint32_t NAM_LEGACY_PRESET_SIZE = 74;
 
 // Substitute default frequency when a stored value is absent (zero).
 static inline float eq_freq_or(float stored, float dflt) { return stored > 0.0f ? stored : dflt; }
+static inline float param_or(float stored, float dflt) { return stored > 0.0f ? stored : dflt; }
+static inline float clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
 void PresetManager::Init(QspiStorage& storage, ModelManager& models)
 {
@@ -82,6 +84,21 @@ void PresetManager::ApplyPreset(const NamPreset& p,
     engine.SetEqBand(Eq3::Band::Bass,   p.eq_bass_gain,   eq_freq_or(p.eq_bass_freq,   100.0f));
     engine.SetEqBand(Eq3::Band::Mid,    p.eq_mid_gain,    eq_freq_or(p.eq_mid_freq,    750.0f));
     engine.SetEqBand(Eq3::Band::Treble, p.eq_treble_gain, eq_freq_or(p.eq_treble_freq, 4000.0f));
+    engine.SetNoiseGate(
+        p.noise_gate_enabled != 0,
+        clampf(p.noise_gate_threshold_db == 0.0f ? -70.0f : p.noise_gate_threshold_db, -90.0f, -20.0f));
+    engine.SetCompressor(
+        p.compressor_enabled != 0,
+        clampf(p.compressor_threshold_db == 0.0f ? -18.0f : p.compressor_threshold_db, -60.0f, 0.0f),
+        clampf(param_or(p.compressor_ratio, 2.0f), 1.0f, 20.0f),
+        clampf(param_or(p.compressor_attack_ms, 10.0f), 0.1f, 200.0f),
+        clampf(param_or(p.compressor_release_ms, 100.0f), 5.0f, 1000.0f));
+    engine.SetDelay(
+        p.delay_enabled != 0,
+        clampf(param_or(p.delay_time_ms, 350.0f), 1.0f, 750.0f),
+        clampf(p.delay_repeats, 0.0f, 0.95f),
+        clampf(p.delay_mix, 0.0f, 1.0f),
+        clampf(p.delay_tone == 0.0f ? 0.5f : p.delay_tone, 0.0f, 1.0f));
 
     // Load model by name. If the named model is missing OR fails to load
     // (corrupt blob, parse error), engage bypass rather than leaving a stale

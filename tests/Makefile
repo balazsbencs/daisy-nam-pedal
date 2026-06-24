@@ -17,7 +17,7 @@ CXXFLAGS = -std=c++17 -O0 -g \
 QSPI_SRCS      = ../QspiStorage.cpp
 EQ_SRCS        = ../Eq3.cpp
 EFFECT_SRCS    = ../PedalEffects.cpp
-AUDIO_SRCS     = ../AudioEngine.cpp ../Eq3.cpp
+AUDIO_SRCS     = ../AudioEngine.cpp ../Eq3.cpp ../PedalEffects.cpp
 IR_SRCS        = ../IRLoader.cpp ../PartitionedConvolver.cpp ../RealFft128.cpp
 PRESET_SRCS    = ../PresetManager.cpp
 MODEL_STUB_SRC = stub_impls/ModelManager_stub.cpp
