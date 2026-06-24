@@ -61,11 +61,14 @@ static bool audio_overload = false;
 // ---------------------------------------------------------------------------
 // Encoder step sizes (performance-mode live edit)
 // ---------------------------------------------------------------------------
-static constexpr float kGainStep   = 0.05f;   // input gain per click
-static constexpr float kVolStep    = 0.05f;    // output vol per click
-static constexpr float kEqDbStep   = 0.5f;    // EQ gain dB per click
-static constexpr float kEqDbMin    = -12.0f;
-static constexpr float kEqDbMax    =  12.0f;
+static constexpr float kGainStep          = 0.10f;   // input gain per click
+static constexpr float kVolStep           = 0.10f;   // output vol per click
+static constexpr float kEqDbStep          = 1.0f;    // EQ gain dB per click
+static constexpr float kBassFreqStepHz    = 20.0f;
+static constexpr float kMidFreqStepHz     = 50.0f;
+static constexpr float kTrebleFreqStepHz  = 100.0f;
+static constexpr float kEqDbMin           = -12.0f;
+static constexpr float kEqDbMax           =  12.0f;
 
 // ---------------------------------------------------------------------------
 // Name pointer arrays built at boot
@@ -404,7 +407,9 @@ int main()
         daisy_seed.PrintLine("Audio started: full NAM DSP.");
 
     // --- Main loop -----------------------------------------------------------
-    uint32_t last_diag_ms = System::GetNow();
+    uint32_t now = System::GetNow();
+    uint32_t last_diag_ms = now;
+    uint32_t last_perf_refresh_ms = now;
 
     for (;;)
     {
@@ -418,7 +423,8 @@ int main()
             if (ev.enc_delta[0] != 0) // ENC1 = Gain
             {
                 float v = audio_engine.GetInputGain() + ev.enc_delta[0] * kGainStep;
-                if (v < 0.0f) v = 0.0f; if (v > 2.0f) v = 2.0f;
+                if (v < 0.0f) v = 0.0f;
+                if (v > 2.0f) v = 2.0f;
                 audio_engine.SetInputGain(v);
                 preset_dirty = true;
                 PushPerformanceScreen();
@@ -426,7 +432,8 @@ int main()
             if (ev.enc_delta[1] != 0) // ENC2 = Bass EQ
             {
                 float g = audio_engine.GetEqGain(Eq3::Band::Bass) + ev.enc_delta[1] * kEqDbStep;
-                if (g < kEqDbMin) g = kEqDbMin; if (g > kEqDbMax) g = kEqDbMax;
+                if (g < kEqDbMin) g = kEqDbMin;
+                if (g > kEqDbMax) g = kEqDbMax;
                 audio_engine.SetEqBand(Eq3::Band::Bass, g, audio_engine.GetEqFreq(Eq3::Band::Bass));
                 preset_dirty = true;
                 PushPerformanceScreen();
@@ -434,7 +441,8 @@ int main()
             if (ev.enc_delta[2] != 0) // ENC3 = Mid EQ
             {
                 float g = audio_engine.GetEqGain(Eq3::Band::Mid) + ev.enc_delta[2] * kEqDbStep;
-                if (g < kEqDbMin) g = kEqDbMin; if (g > kEqDbMax) g = kEqDbMax;
+                if (g < kEqDbMin) g = kEqDbMin;
+                if (g > kEqDbMax) g = kEqDbMax;
                 audio_engine.SetEqBand(Eq3::Band::Mid, g, audio_engine.GetEqFreq(Eq3::Band::Mid));
                 preset_dirty = true;
                 PushPerformanceScreen();
@@ -442,7 +450,8 @@ int main()
             if (ev.enc_delta[3] != 0) // ENC4 = Treble EQ
             {
                 float g = audio_engine.GetEqGain(Eq3::Band::Treble) + ev.enc_delta[3] * kEqDbStep;
-                if (g < kEqDbMin) g = kEqDbMin; if (g > kEqDbMax) g = kEqDbMax;
+                if (g < kEqDbMin) g = kEqDbMin;
+                if (g > kEqDbMax) g = kEqDbMax;
                 audio_engine.SetEqBand(Eq3::Band::Treble, g, audio_engine.GetEqFreq(Eq3::Band::Treble));
                 preset_dirty = true;
                 PushPerformanceScreen();
@@ -450,7 +459,8 @@ int main()
             if (ev.enc_delta[4] != 0) // ENC5 = Vol
             {
                 float v = audio_engine.GetOutputVol() + ev.enc_delta[4] * kVolStep;
-                if (v < 0.0f) v = 0.0f; if (v > 1.0f) v = 1.0f;
+                if (v < 0.0f) v = 0.0f;
+                if (v > 1.0f) v = 1.0f;
                 audio_engine.SetOutputVol(v);
                 preset_dirty = true;
                 PushPerformanceScreen();
@@ -615,21 +625,21 @@ int main()
                     case 4: // BYPASS — toggle
                         edit_state.bypass = !edit_state.bypass;
                         break;
-                    case 5: // BASS FREQ  [20, 500] Hz, step 10 Hz
+                    case 5: // BASS FREQ  [20, 500] Hz
                     {
-                        float f = edit_state.eq_bass_freq + ev.enc_delta[0] * 10.0f;
+                        float f = edit_state.eq_bass_freq + ev.enc_delta[0] * kBassFreqStepHz;
                         edit_state.eq_bass_freq = (f < 20.0f) ? 20.0f : (f > 500.0f) ? 500.0f : f;
                         break;
                     }
-                    case 6: // MID FREQ  [200, 2000] Hz, step 25 Hz
+                    case 6: // MID FREQ  [200, 2000] Hz
                     {
-                        float f = edit_state.eq_mid_freq + ev.enc_delta[0] * 25.0f;
+                        float f = edit_state.eq_mid_freq + ev.enc_delta[0] * kMidFreqStepHz;
                         edit_state.eq_mid_freq = (f < 200.0f) ? 200.0f : (f > 2000.0f) ? 2000.0f : f;
                         break;
                     }
-                    case 7: // TRE FREQ  [1000, 8000] Hz, step 50 Hz
+                    case 7: // TRE FREQ  [1000, 8000] Hz
                     {
-                        float f = edit_state.eq_treble_freq + ev.enc_delta[0] * 50.0f;
+                        float f = edit_state.eq_treble_freq + ev.enc_delta[0] * kTrebleFreqStepHz;
                         edit_state.eq_treble_freq = (f < 1000.0f) ? 1000.0f : (f > 8000.0f) ? 8000.0f : f;
                         break;
                     }
@@ -697,12 +707,18 @@ int main()
             }
         }
 
+        now = System::GetNow();
+        if (ShouldRefreshPerformanceScreen(browsing, editing, last_perf_refresh_ms, now))
+        {
+            PushPerformanceScreen();
+            last_perf_refresh_ms = now;
+        }
+
         // Display update (fps-capped, non-blocking DMA).
         if constexpr (kDisplayEnabled)
             ui.Update();
 
-        // Once-per-second diagnostics + forced display refresh.
-        uint32_t now = System::GetNow();
+        // Once-per-second diagnostics.
         if (now - last_diag_ms >= 1000)
         {
             float cb_ms = static_cast<float>(cb_max_cyc) / 480000.0f;
@@ -724,8 +740,6 @@ int main()
                 audio_engine.GetBypass() ? "Y" : "N");
             cb_max_cyc   = 0;
             last_diag_ms = now;
-            if (ShouldRefreshPerformanceScreen(browsing, editing))
-                PushPerformanceScreen();
         }
     }
 }
