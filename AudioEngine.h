@@ -6,7 +6,7 @@
 // pointer swap brings the new object live.
 //
 // Signal chain (mono, 48 kHz):
-//   in → input_gain → NAM model → IR convolver → output_vol → out L+R
+//   in -> input_gain -> gate -> compressor -> NAM -> IR -> EQ -> delay -> output_vol -> out
 
 #pragma once
 #include "Eq3.h"

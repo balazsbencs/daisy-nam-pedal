@@ -29,6 +29,9 @@ void AudioEngine::Process(const float* in, float* out, size_t frames)
     for (size_t i = 0; i < frames; ++i)
         scratch_in_[i] = in[i] * gain;
 
+    gate_.Process(scratch_in_, frames);
+    compressor_.Process(scratch_in_, frames);
+
     // NAM model stage.
     nam::DSP* model = active_model_.load();
     if (model)
@@ -48,6 +51,9 @@ void AudioEngine::Process(const float* in, float* out, size_t frames)
     IIRConvolver* ir = active_ir_.load();
     if (ir)
         ir->Process(scratch_out_, scratch_out_, frames);
+
+    eq_.Process(scratch_out_, frames);
+    delay_.Process(scratch_out_, frames);
 
     // Apply output volume and write result.
     for (size_t i = 0; i < frames; ++i)
