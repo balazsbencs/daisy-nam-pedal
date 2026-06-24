@@ -44,11 +44,13 @@ static bool    preset_dirty  = false; // unsaved live-edit changes
 static volatile uint32_t cb_count   = 0;
 static volatile uint32_t cb_max_cyc = 0;
 static volatile float    diag_input_peak = 0.0f;
+static volatile float    diag_output_peak = 0.0f;
+static volatile float    diag_diff_peak = 0.0f;
 
 // Audio diagnostics:
 // 0 = full pedal DSP, 1 = input passthrough, 2 = generated beep pattern,
 // 3 = process one full DSP block, then silence (measures an over-budget block).
-static constexpr uint8_t kAudioDiagMode = 2;
+static constexpr uint8_t kAudioDiagMode = 0;
 static constexpr bool    kDisplayEnabled = true;
 static constexpr bool    kDisableIrForTiming = false;
 
@@ -148,7 +150,16 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     }
 
     for (size_t i = 0; i < frames; ++i)
+    {
+        float output_magnitude = mono_out[i] < 0.0f ? -mono_out[i] : mono_out[i];
+        float diff = mono_out[i] - mono_in[i];
+        float diff_magnitude = diff < 0.0f ? -diff : diff;
+        if(output_magnitude > diag_output_peak)
+            diag_output_peak = output_magnitude;
+        if(diff_magnitude > diag_diff_peak)
+            diag_diff_peak = diff_magnitude;
         out[0][i] = out[1][i] = mono_out[i];
+    }
 
     uint32_t cyc = DWT->CYCCNT - t0;
     if (cyc > cb_max_cyc) cb_max_cyc = cyc;
@@ -697,11 +708,17 @@ int main()
             float cb_ms = static_cast<float>(cb_max_cyc) / 480000.0f;
             audio_overload = (cb_max_cyc > kCbOverloadCyc);
             float input_peak = diag_input_peak;
+            float output_peak = diag_output_peak;
+            float diff_peak = diag_diff_peak;
             diag_input_peak = 0.0f;
-            daisy_seed.PrintLine("cb=%lu  cpu_peak=%.3fms%s  in_peak=%.4f  gain=%.2f  vol=%.2f  bypass=%s",
+            diag_output_peak = 0.0f;
+            diag_diff_peak = 0.0f;
+            daisy_seed.PrintLine("cb=%lu  cpu_peak=%.3fms%s  in=%.4f  out=%.4f  diff=%.4f  gain=%.2f  vol=%.2f  bypass=%s",
                 (unsigned long)cb_count, cb_ms,
                 audio_overload ? "  !OVERLOAD" : "",
                 (double)input_peak,
+                (double)output_peak,
+                (double)diff_peak,
                 (double)audio_engine.GetInputGain(),
                 (double)audio_engine.GetOutputVol(),
                 audio_engine.GetBypass() ? "Y" : "N");
