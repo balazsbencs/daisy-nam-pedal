@@ -1,7 +1,7 @@
 [
   {
     "name": "Marshall",
-    "model": "marshall",
+    "model": "be100",
     "ir": "ir",
     "input_gain": 1.0,
     "output_volume": 0.8,
