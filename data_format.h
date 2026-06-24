@@ -82,8 +82,10 @@ typedef struct
 // by name so it stays valid regardless of directory ordering. Levels in [0,1].
 //
 // Packed to eliminate implicit compiler padding between the char[] fields and the
-// first float. Python packer uses "<31s31sffB3x" which also produces 74 bytes.
-// static_assert below enforces the match at compile time.
+// first float. Current packers use "<31s31sffB3x6f" for 98 bytes.
+// Firmware still accepts older 74-byte blobs by zero-filling the appended EQ
+// fields in PresetManager before applying default EQ frequencies at runtime.
+// static_assert below enforces the current match at compile time.
 typedef struct __attribute__((packed))
 {
     char    model_name[NAM_DATA_NAME_LEN]; //  0..30

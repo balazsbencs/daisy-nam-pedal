@@ -33,6 +33,18 @@ static std::vector<uint8_t> make_preset_blob(const char* mname, const char* irna
     return buf;
 }
 
+static std::vector<uint8_t> make_legacy_preset_blob(const char* mname, const char* irname,
+                                                     float gain, float vol, uint8_t bypass)
+{
+    std::vector<uint8_t> buf(74, 0);
+    strncpy(reinterpret_cast<char*>(buf.data()), mname, NAM_DATA_NAME_LEN - 1);
+    strncpy(reinterpret_cast<char*>(buf.data() + 31), irname, NAM_DATA_NAME_LEN - 1);
+    memcpy(buf.data() + 62, &gain, sizeof(float));
+    memcpy(buf.data() + 66, &vol, sizeof(float));
+    buf[70] = bypass;
+    return buf;
+}
+
 // ----- TEST-04 --------------------------------------------------------------
 
 static void test_no_presets_synthesises_per_model()
@@ -206,6 +218,62 @@ static void test_apply_eq_default_freq_fallback()
     CHECK(std::fabs(engine.GetEqFreq(Eq3::Band::Treble) - 4000.0f) < 1e-3f);
 }
 
+static void test_preset_entries_load_full_eq_blob()
+{
+    FakeStorage fs;
+    auto blob = make_preset_blob("", "", 1.0f, 0.8f, 0);
+    NamPreset* raw = reinterpret_cast<NamPreset*>(blob.data());
+    raw->eq_bass_gain = -3.0f;
+    raw->eq_mid_gain = 2.5f;
+    raw->eq_treble_gain = 4.0f;
+    raw->eq_bass_freq = 120.0f;
+    raw->eq_mid_freq = 800.0f;
+    raw->eq_treble_freq = 3500.0f;
+
+    fs.AddEntry(NAM_ENTRY_PRESET, "EQ Lead", blob.data(), (uint32_t)blob.size());
+    fs.Commit();
+
+    set_fake(fs);
+    QspiStorage storage; storage.Init();
+    ModelManager models; models.Init(storage);
+    PresetManager presets;
+    presets.Init(storage, models);
+
+    const NamPreset& p = presets.ActivePreset();
+    CHECK(std::fabs(p.eq_bass_gain - (-3.0f)) < 1e-6f);
+    CHECK(std::fabs(p.eq_mid_gain - 2.5f) < 1e-6f);
+    CHECK(std::fabs(p.eq_treble_gain - 4.0f) < 1e-6f);
+    CHECK(std::fabs(p.eq_bass_freq - 120.0f) < 1e-3f);
+    CHECK(std::fabs(p.eq_mid_freq - 800.0f) < 1e-3f);
+    CHECK(std::fabs(p.eq_treble_freq - 3500.0f) < 1e-3f);
+}
+
+static void test_legacy_preset_blob_zero_fills_eq_fields()
+{
+    FakeStorage fs;
+    auto blob = make_legacy_preset_blob("LegacyAmp", "LegacyCab", 0.7f, 0.6f, 0);
+    fs.AddEntry(NAM_ENTRY_PRESET, "Legacy", blob.data(), (uint32_t)blob.size());
+    fs.Commit();
+
+    set_fake(fs);
+    QspiStorage storage; storage.Init();
+    ModelManager models; models.Init(storage);
+    PresetManager presets;
+    presets.Init(storage, models);
+
+    const NamPreset& p = presets.ActivePreset();
+    CHECK_STR(p.model_name, "LegacyAmp");
+    CHECK_STR(p.ir_name, "LegacyCab");
+    CHECK(std::fabs(p.input_gain - 0.7f) < 1e-6f);
+    CHECK(std::fabs(p.output_volume - 0.6f) < 1e-6f);
+    CHECK(std::fabs(p.eq_bass_gain) < 1e-6f);
+    CHECK(std::fabs(p.eq_mid_gain) < 1e-6f);
+    CHECK(std::fabs(p.eq_treble_gain) < 1e-6f);
+    CHECK(std::fabs(p.eq_bass_freq) < 1e-6f);
+    CHECK(std::fabs(p.eq_mid_freq) < 1e-6f);
+    CHECK(std::fabs(p.eq_treble_freq) < 1e-6f);
+}
+
 int main()
 {
     test_no_presets_synthesises_per_model();
@@ -214,6 +282,8 @@ int main()
     test_navigation_wraps();
     test_navigation_no_crash_when_empty();
     test_apply_unknown_model_forces_bypass();
+    test_preset_entries_load_full_eq_blob();
+    test_legacy_preset_blob_zero_fills_eq_fields();
     test_apply_eq_forwarded();
     test_apply_eq_default_freq_fallback();
     return test_summary("preset_manager");
