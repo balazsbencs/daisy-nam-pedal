@@ -17,3 +17,13 @@ constexpr bool ShouldRefreshPerformanceScreen(bool     browsing,
     return ShouldRefreshPerformanceScreen(browsing, editing)
         && (now_ms - last_refresh_ms >= kPerformanceRefreshMs);
 }
+
+constexpr uint32_t kTunerRefreshMs = 40;
+
+// Tuner analysis/UI cadence: refresh while active and the interval has elapsed.
+constexpr bool ShouldRefreshTunerScreen(bool     active,
+                                        uint32_t last_refresh_ms,
+                                        uint32_t now_ms)
+{
+    return active && (now_ms - last_refresh_ms >= kTunerRefreshMs);
+}

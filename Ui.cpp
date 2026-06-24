@@ -1,6 +1,8 @@
 #include "Ui.h"
 #include "sys/system.h"
 #include <cstdio>
+#include <cstring>
+#include <cmath>
 
 using namespace pedal;
 using namespace daisy;
@@ -74,6 +76,22 @@ void Ui::ShowEdit(const EditState& s)
     dirty_  = true;
 }
 
+void Ui::ShowTuner(const TunerState& s)
+{
+    // Only redraw when something visible changed (note, octave, lock state, or
+    // the rounded cents the bar shows) — avoids needless pushes at refresh rate.
+    bool changed = screen_ != Screen::Tuner
+                || tuner_.stable != s.stable
+                || tuner_.signal_present != s.signal_present
+                || tuner_.octave != s.octave
+                || std::strncmp(tuner_.note, s.note, sizeof(s.note)) != 0
+                || std::lroundf(tuner_.cents) != std::lroundf(s.cents);
+    tuner_  = s;
+    screen_ = Screen::Tuner;
+    if (changed)
+        dirty_ = true;
+}
+
 // ---------------------------------------------------------------------------
 // Update — call every main-loop iteration
 // ---------------------------------------------------------------------------
@@ -94,8 +112,10 @@ void Ui::Update()
         RenderPerformance();
     else if (screen_ == Screen::Browse)
         RenderBrowse();
-    else
+    else if (screen_ == Screen::Edit)
         RenderEdit();
+    else
+        RenderTuner();
 
     PushFrame();
     dirty_        = false;
@@ -350,6 +370,68 @@ void Ui::RenderEdit()
     DisplayRenderer::DrawText(kMargin, kEditHintY,
                               "FS1:save  FS2:revert",
                               kColorDim, kColorBlack, Font_7x10);
+}
+
+// ---------------------------------------------------------------------------
+// RenderTuner — muted chromatic tuner
+// ---------------------------------------------------------------------------
+
+void Ui::RenderTuner()
+{
+    using DR = DisplayRenderer;
+    DR::Clear(kColorBlack);
+
+    auto centered_x = [](const char* s, const FontDef& f, uint8_t scale) -> uint16_t {
+        size_t n = 0; while (s[n]) ++n;
+        uint16_t w = static_cast<uint16_t>(n * f.FontWidth * scale);
+        return (w < 240u) ? static_cast<uint16_t>((240u - w) / 2u) : 0u;
+    };
+
+    // Title + muted badge.
+    DR::DrawTextScaled(centered_x("TUNER", Font_7x10, 2), 10, "TUNER",
+                       kColorCyan, kColorBlack, Font_7x10, 2);
+    DR::DrawText(centered_x("MUTED", Font_7x10, 1), 44, "MUTED",
+                 kColorRed, kColorBlack, Font_7x10);
+
+    // Large note (or "--" when no stable pitch).
+    char big[6];
+    if (tuner_.stable)
+        snprintf(big, sizeof(big), "%s%d", tuner_.note, tuner_.octave);
+    else
+        snprintf(big, sizeof(big), "--");
+    uint16_t note_fg = tuner_.stable ? kColorWhite : kColorDim;
+    DR::DrawTextScaled(centered_x(big, Font_16x26, 2), 120, big,
+                       note_fg, kColorBlack, Font_16x26, 2);
+
+    // Cents bar from -50 .. +50.
+    constexpr uint16_t kBarX = 20, kBarW = 200, kBarY = 235, kBarH = 18;
+    const uint16_t     cx = kBarX + kBarW / 2;
+    DR::FillRect(kBarX, kBarY, kBarW, kBarH, 0x1082u);            // track
+    DR::VLine(cx, kBarY - 6, kBarH + 12, kColorWhite);           // center marker
+
+    if (tuner_.stable)
+    {
+        float c = tuner_.cents;                                  // clamp to bar range
+        if (c >  50.0f) c =  50.0f;
+        if (c < -50.0f) c = -50.0f;
+        int      off = static_cast<int>(c / 50.0f * (kBarW / 2));
+        uint16_t ix  = static_cast<uint16_t>(static_cast<int>(cx) + off);
+        uint16_t col = (std::fabs(c) < 5.0f) ? kColorGreen : kColorYellow;
+        DR::FillRect(static_cast<uint16_t>(ix - 2), kBarY, 5, kBarH, col);
+    }
+
+    DR::DrawText(kBarX, kBarY + kBarH + 6, "-50", kColorDim, kColorBlack, Font_7x10);
+    DR::DrawText(kBarX + kBarW - 21, kBarY + kBarH + 6, "+50", kColorDim, kColorBlack, Font_7x10);
+
+    // Numeric readout.
+    char info[24];
+    if (tuner_.stable)
+        snprintf(info, sizeof(info), "%.1f Hz  %+d c",
+                 (double)tuner_.frequency_hz, (int)std::lroundf(tuner_.cents));
+    else
+        snprintf(info, sizeof(info), "no signal");
+    DR::DrawText(centered_x(info, Font_7x10, 1), 285, info,
+                 kColorDim, kColorBlack, Font_7x10);
 }
 
 // ---------------------------------------------------------------------------

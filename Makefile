@@ -21,6 +21,7 @@ CPP_SOURCES = \
   ModelManager.cpp \
   PresetManager.cpp \
   Controls.cpp \
+  TunerDetector.cpp \
   Ui.cpp \
   display/st7789_driver.cpp \
   display/display_renderer.cpp \

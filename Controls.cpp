@@ -39,5 +39,27 @@ ControlEvent Controls::Process()
     enc1_long_was_active_ = enc1_long_active;
     fs1_hold_was_active_  = fs1_hold_active;
     fs2_hold_was_active_  = fs2_hold_active;
+
+    // Both-footswitch chord: detect before individual holds/taps escape. When
+    // both have been down kFootswitchChordMs, emit fs_both_hold and suppress the
+    // individual events for the whole press.
+    bool     fs1_pressed = fs1_.Pressed();
+    bool     fs2_pressed = fs2_.Pressed();
+    uint32_t chord_held  = 0;
+    if (fs1_pressed && fs2_pressed)
+    {
+        uint32_t h1 = static_cast<uint32_t>(fs1_.TimeHeldMs());
+        uint32_t h2 = static_cast<uint32_t>(fs2_.TimeHeldMs());
+        chord_held  = (h1 < h2) ? h1 : h2;
+    }
+    FootswitchChordOut chord = chord_.Update(fs1_pressed, fs2_pressed, chord_held);
+    ev.fs_both_hold          = chord.both_hold;
+    if (chord.suppress_indiv)
+    {
+        // ponytail: a deliberate stomp lands both switches within one tick, so
+        // taps suppress cleanly. Feet staggered by >1 tick leak the first tap
+        // (advances one preset). Upgrade path: defer taps to release edge.
+        ev.fs1_tap = ev.fs1_hold = ev.fs2_tap = ev.fs2_hold = false;
+    }
     return ev;
 }

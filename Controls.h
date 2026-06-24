@@ -4,6 +4,7 @@
 #include "hid/encoder.h"
 #include "QuadEncoder.h"
 #include "HardwareConfig.h"
+#include "footswitch_chord.h"
 
 struct ControlEvent
 {
@@ -15,6 +16,7 @@ struct ControlEvent
     bool   fs1_hold     = false; // FS1 held > kLongPressMs (save)
     bool   fs2_tap      = false; // FS2 momentary press (prev preset)
     bool   fs2_hold     = false; // FS2 held > kLongPressMs (revert)
+    bool   fs_both_hold = false; // both footswitches held > kFootswitchChordMs (tuner)
 };
 
 class Controls
@@ -35,4 +37,6 @@ private:
     bool enc1_long_was_active_ = false;
     bool fs1_hold_was_active_  = false;
     bool fs2_hold_was_active_  = false;
+
+    FootswitchChord chord_;
 };

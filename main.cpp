@@ -16,6 +16,7 @@
 #include "PresetManager.h"
 #include "BootloaderCommand.h"
 #include "QspiStorage.h"
+#include "TunerDetector.h"
 #include "Ui.h"
 #include "ui_mode.h"
 #include "hid/usb.h"
@@ -37,6 +38,12 @@ static Ui            ui;
 static UsbHandle     usb_cdc;
 
 static BootloaderCommandParser bootloader_command_parser;
+
+// Tuner mode: captured/analyzed off the normal signal path. tuner_active is set
+// from the main loop and read in the audio IRQ; the detector is lock-free.
+static TunerDetector tuner_detector;
+static volatile bool tuner_active = false;
+static TunerPitch    tuner_pitch;
 
 // ---------------------------------------------------------------------------
 // UI mode flags (mutually exclusive)
@@ -127,6 +134,18 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
         float magnitude = mono_in[i] < 0.0f ? -mono_in[i] : mono_in[i];
         if(magnitude > diag_input_peak)
             diag_input_peak = magnitude;
+    }
+
+    // Tuner mode: feed the detector the dry input and mute the outputs. Skip
+    // the entire amp/effects path.
+    if (tuner_active)
+    {
+        tuner_detector.PushAudioBlock(mono_in, frames);
+        for (size_t i = 0; i < frames; ++i)
+            out[0][i] = out[1][i] = 0.0f;
+        uint32_t cyc = DWT->CYCCNT - t0;
+        if (cyc > cb_max_cyc) cb_max_cyc = cyc;
+        return;
     }
 
     if constexpr (kAudioDiagMode == 2)
@@ -233,6 +252,22 @@ static void PushPerformanceScreen()
     s.preset_idx   = presets.Current();
     s.preset_count = presets.Count();
     ui.ShowPerformance(s);
+}
+
+static void PushTunerScreen()
+{
+    if constexpr (!kDisplayEnabled)
+        return;
+
+    Ui::TunerState s;
+    s.signal_present = tuner_pitch.signal_present;
+    s.stable         = tuner_pitch.stable;
+    s.octave         = tuner_pitch.octave;
+    s.cents          = tuner_pitch.cents;
+    s.frequency_hz   = tuner_pitch.frequency_hz;
+    s.confidence     = tuner_pitch.confidence;
+    memcpy(s.note, tuner_pitch.note, sizeof(s.note));
+    ui.ShowTuner(s);
 }
 
 static void PushBrowseScreen()
@@ -433,10 +468,49 @@ int main()
     uint32_t now = System::GetNow();
     uint32_t last_diag_ms = now;
     uint32_t last_perf_refresh_ms = now;
+    uint32_t last_tuner_refresh_ms = now;
 
     for (;;)
     {
         ControlEvent ev = controls.Process();
+
+        // --- Tuner mode (takes over the loop while active) ------------------
+        if (tuner_active)
+        {
+            // Any footswitch gesture exits back to performance mode.
+            if (ev.fs_both_hold || ev.fs1_tap || ev.fs2_tap)
+            {
+                tuner_active = false;       // stop the IRQ pushing first
+                tuner_detector.Reset();
+                PushPerformanceScreen();
+            }
+            else
+            {
+                now = System::GetNow();
+                if (ShouldRefreshTunerScreen(tuner_active, last_tuner_refresh_ms, now))
+                {
+                    tuner_detector.Analyze(tuner_pitch);
+                    PushTunerScreen();
+                    last_tuner_refresh_ms = now;
+                }
+            }
+            if constexpr (kDisplayEnabled)
+                ui.Update();
+            continue;
+        }
+
+        // Enter tuner from performance mode only (blocked while browsing/editing).
+        if (ev.fs_both_hold && !browsing && !editing)
+        {
+            tuner_detector.Reset();
+            tuner_pitch = TunerPitch{};
+            tuner_active = true;
+            last_tuner_refresh_ms = System::GetNow();
+            PushTunerScreen();              // immediate "--" / no-signal frame
+            if constexpr (kDisplayEnabled)
+                ui.Update();
+            continue;
+        }
 
         if (!browsing && !editing)
         {

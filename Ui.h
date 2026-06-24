@@ -22,7 +22,7 @@ namespace pedal { class St7789Driver; }
 class Ui
 {
 public:
-    enum class Screen { Performance, Browse, Edit };
+    enum class Screen { Performance, Browse, Edit, Tuner };
 
     struct PerformanceState
     {
@@ -48,6 +48,17 @@ public:
         uint8_t     count;
         uint8_t     cursor;
         uint8_t     scroll_top;
+    };
+
+    struct TunerState
+    {
+        bool  signal_present = false;
+        bool  stable         = false;
+        char  note[4]        = {'-', '-', '\0', '\0'};
+        int   octave         = 0;
+        float cents          = 0.0f;
+        float frequency_hz   = 0.0f;
+        float confidence     = 0.0f;
     };
 
     // Working copy of a preset under edit plus enough context to render all fields.
@@ -86,6 +97,7 @@ public:
     void ShowPerformance(const PerformanceState& s);
     void ShowBrowse(const BrowseState& s);
     void ShowEdit(const EditState& s);
+    void ShowTuner(const TunerState& s);
 
     // Call every main-loop iteration.
     void Update();
@@ -101,6 +113,7 @@ private:
     void RenderPerformance();
     void RenderBrowse();
     void RenderEdit();
+    void RenderTuner();
     void PushFrame();
 
     pedal::St7789Driver driver_;
@@ -112,4 +125,5 @@ private:
     PerformanceState perf_   = {};
     BrowseState      browse_ = {};
     EditState        edit_   = {};
+    TunerState       tuner_  = {};
 };
