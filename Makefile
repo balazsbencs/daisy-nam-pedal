@@ -11,6 +11,7 @@ CPP_SOURCES = \
   QspiStorage.cpp \
   AudioEngine.cpp \
   Eq3.cpp \
+  PedalEffects.cpp \
   RealFft128.cpp \
   PartitionedConvolver.cpp \
   QuadEncoder.cpp \
