@@ -10,8 +10,8 @@ using namespace daisy;
 // ---------------------------------------------------------------------------
 // Row Y positions
 static constexpr uint16_t kRowHeader    =   4;   // preset index + bypass pill
-static constexpr uint16_t kRowPresetBox =  20;   // outer rect top
-static constexpr uint16_t kRowPresetTxt =  28;   // text inside box (Font_16x26)
+static constexpr uint16_t kRowPresetBox =  30;   // outer rect top
+static constexpr uint16_t kRowPresetTxt =  32;   // text inside box (Font_16x26)
 static constexpr uint16_t kRowAmpLbl    =  76;   // "AMP" label (Font_7x10)
 static constexpr uint16_t kRowAmpName   =  88;   // model name
 static constexpr uint16_t kRowIrLbl     = 112;   // "CAB" label
@@ -111,22 +111,13 @@ void Ui::RenderPerformance()
     using DR = DisplayRenderer;
     DR::Clear(kColorBlack);
 
-    // --- Channel strip layout constants -------------------------------------
-    constexpr uint16_t kMW    = 32;   // meter width
-    constexpr uint16_t kMGap  =  6;   // gap between meters
-    constexpr uint16_t kMX0   = 28;   // left edge of first meter (centres 5 bars in 240px)
-    constexpr uint16_t kMY    = 70;   // meter top
-    constexpr uint16_t kMH    = 182;  // meter height
-    constexpr uint16_t kEqMax = 12;   // ±12 dB full-scale for EQ
+    constexpr uint16_t kEqMax = 12;
 
-    // --- Header: index + dirty + bypass pill --------------------------------
+    // Header: preset index, larger preset name, bypass pill.
     char idx_buf[8];
     snprintf(idx_buf, sizeof(idx_buf), "%02u/%02u",
              (unsigned)(perf_.preset_idx + 1), (unsigned)perf_.preset_count);
     DR::DrawText(kMargin, kRowHeader, idx_buf, kColorDim, kColorBlack, Font_7x10);
-
-    if (perf_.dirty)
-        DR::DrawText(56, kRowHeader, "* EDITED", kColorYellow, kColorBlack, Font_7x10);
 
     const uint16_t pill_x = 240 - 56;
     const uint16_t pill_c = perf_.bypass ? kColorRed : kColorGreen;
@@ -135,49 +126,62 @@ void Ui::RenderPerformance()
                  perf_.bypass ? "BYPASS" : "ACTIVE",
                  kColorBlack, pill_c, Font_7x10);
 
-    // --- Preset name (2× scaled, centred) -----------------------------------
     const char* pname = perf_.preset_name ? perf_.preset_name : "---";
-    size_t len = 0; while (pname[len]) len++;
-    uint16_t nm_w  = static_cast<uint16_t>(len * Font_7x10.FontWidth * 2u);
-    uint16_t nm_x  = (nm_w < 240u) ? static_cast<uint16_t>((240u - nm_w) / 2u) : 0u;
-    DR::DrawTextScaled(nm_x, 20, pname, kColorWhite, kColorBlack, Font_7x10, 2);
+    size_t pname_len = 0; while (pname[pname_len]) pname_len++;
+    uint16_t pname_w = static_cast<uint16_t>(pname_len * Font_7x10.FontWidth * 2u);
+    uint16_t pname_x = (pname_w < 124u) ? static_cast<uint16_t>(58u + (124u - pname_w) / 2u) : 56u;
+    DR::DrawTextScaled(pname_x, 16, pname, kColorWhite, kColorBlack, Font_7x10, 2);
 
-    // --- AMP / CAB labels ---------------------------------------------------
-    char amp_buf[NAM_DATA_NAME_LEN + 8];
-    snprintf(amp_buf, sizeof(amp_buf), "AMP %s",
-             perf_.model_name ? perf_.model_name : "---");
-    DR::DrawText(kMargin, 42, amp_buf, kColorDim, kColorBlack, Font_7x10);
+    if (perf_.dirty)
+        DR::DrawText(76, 38, "* EDITED", kColorYellow, kColorBlack, Font_7x10);
 
-    char cab_buf[NAM_DATA_NAME_LEN + 8];
-    snprintf(cab_buf, sizeof(cab_buf), "CAB %s",
-             perf_.ir_name ? perf_.ir_name : "Off");
-    DR::DrawText(kMargin, 54, cab_buf, kColorDim, kColorBlack, Font_7x10);
+    // Large AMP block.
+    DR::FillRoundRect(10, 40, 220, 82, 5, 0x1082u, kColorBlack);
+    DR::HLine(10, 40, 220, kColorOrange);
+    DR::HLine(10, 115, 220, kColorOrange);
+    DR::VLine(10, 35, 80, kColorOrange);
+    DR::VLine(229, 35, 80, kColorOrange);
+    DR::DrawText(20, 53, "AMP", kColorDim, 0x1082u, Font_7x10);
+    DR::DrawTextScaled(20, 80, perf_.model_name ? perf_.model_name : "---",
+                       kColorWhite, 0x1082u, Font_7x10, 2);
 
-    // Separator
-    DR::HLine(0, 66, 240, kColorDim);
+    // Large CAB/IR block.
+    DR::FillRoundRect(10, 126, 220, 82, 5, 0x1082u, kColorBlack);
+    DR::HLine(10, 126, 220, kColorCyan);
+    DR::HLine(10, 207, 220, kColorCyan);
+    DR::VLine(10, 127, 80, kColorCyan);
+    DR::VLine(229, 127, 80, kColorCyan);
+    DR::DrawText(20, 145, "CAB", kColorDim, 0x1082u, Font_7x10);
+    DR::DrawTextScaled(20, 172, perf_.ir_name ? perf_.ir_name : "Off",
+                       kColorWhite, 0x1082u, Font_7x10, 2);
 
-    // --- 5 vertical meters --------------------------------------------------
+    // Compact meters, about 70% shorter than the old 182px channel strip.
     struct MeterDef { float val; bool bipolar; uint16_t color; const char* lbl; };
     MeterDef meters[5] = {
-        { perf_.input_gain / 2.0f,              false, kColorCyan,   "GAIN" },
-        { perf_.eq_bass    / (float)kEqMax,     true,  kColorGreen,  "BASS" },
-        { perf_.eq_mid     / (float)kEqMax,     true,  kColorGreen,  "MID"  },
-        { perf_.eq_treble  / (float)kEqMax,     true,  kColorGreen,  "TRE"  },
-        { perf_.output_vol,                     false, kColorCyan,   "VOL"  },
+        { perf_.input_gain / 2.0f,              false, kColorCyan,  "GAIN" },
+        { perf_.eq_bass    / (float)kEqMax,     true,  kColorGreen, "BASS" },
+        { perf_.eq_mid     / (float)kEqMax,     true,  kColorGreen, "MID"  },
+        { perf_.eq_treble  / (float)kEqMax,     true,  kColorGreen, "TRE"  },
+        { perf_.output_vol,                     false, kColorCyan,  "VOL"  },
     };
+
+    constexpr uint16_t kMW   = 26;
+    constexpr uint16_t kMH   = 52;
+    constexpr uint16_t kMY   = 225;
+    constexpr uint16_t kMX0  = 25;
+    constexpr uint16_t kMGap = 16;
 
     for (int i = 0; i < 5; ++i) {
         uint16_t mx = static_cast<uint16_t>(kMX0 + i * (kMW + kMGap));
         DR::VMeter(mx, kMY, kMW, kMH, meters[i].val, meters[i].bipolar, meters[i].color);
-        // Band label centred below the meter
+
         uint16_t lbl_len = 0; while (meters[i].lbl[lbl_len]) lbl_len++;
         uint16_t lbl_w   = static_cast<uint16_t>(lbl_len * Font_7x10.FontWidth);
-        uint16_t lbl_x   = static_cast<uint16_t>(mx + (kMW - lbl_w) / 2u);
-        DR::DrawText(lbl_x, kMY + kMH + 4u, meters[i].lbl,
+        uint16_t lbl_x   = static_cast<uint16_t>(mx + (kMW > lbl_w ? (kMW - lbl_w) / 2u : 0u));
+        DR::DrawText(lbl_x, kMY + kMH + 6u, meters[i].lbl,
                      meters[i].color, kColorBlack, Font_7x10);
     }
 
-    // --- Footer -------------------------------------------------------------
     if (perf_.overload)
         DR::DrawText(kMargin, kRowHint, "! AUDIO OVERLOAD", kColorRed, kColorBlack, Font_7x10);
     else
