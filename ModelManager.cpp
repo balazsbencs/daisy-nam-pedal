@@ -33,6 +33,16 @@ bool ModelManager::Load(uint8_t i, AudioEngine& engine,
     const uint8_t* blob   = storage_->BlobPtr(e);
     if (!blob) return false;
 
+    // Free the active model BEFORE allocating the new one so the new model's
+    // conv-history arena (~150 KB) is reused from the just-freed SRAM hole and
+    // keeps running from fast SRAM. Holding both live forces the new arena to
+    // spill into SDRAM (heap is ~342 KB, two arenas don't fit) and running the
+    // model from SDRAM is ~40% slower — it blew the 1.0 ms block deadline and
+    // tripped !OVERLOAD on hardware. The brief dry passthrough during the load
+    // (active_model_ -> null) is imperceptible on a manual preset switch. The
+    // SDRAM-spill heap (SdramHeap.cpp) remains as a no-fault safety net.
+    engine.SwapModel(nullptr);
+
     std::unique_ptr<nam::DSP> model;
     try
     {
@@ -48,9 +58,9 @@ bool ModelManager::Load(uint8_t i, AudioEngine& engine,
     model->SetPrewarmOnReset(false);
     model->Reset(static_cast<double>(sample_rate), static_cast<int>(block_size));
 
-    // Swap into engine — old model returned for disposal here (main loop safe).
-    auto old = engine.SwapModel(std::move(model));
-    // old destroyed here (never in ISR).
+    // Swap the new (SRAM-resident) model in. The old one was already freed
+    // above, so this returns an empty owner.
+    engine.SwapModel(std::move(model));
 
     current_ = i;
     return true;
