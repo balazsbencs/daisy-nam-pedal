@@ -41,6 +41,11 @@ class FootswitchChord
                 both_hold_sent_ = true;
             }
         }
+        // Report BEFORE resetting so the tick BOTH release is still suppressed.
+        // Taps fire on the release edge, so this swallows the release tap of the
+        // last switch to come up — exiting a chord never leaks a preset change.
+        out.suppress_indiv = suppressed_;
+
         if (!any)
         {
             // Reset only after BOTH release, so a staggered release of one switch
@@ -49,7 +54,6 @@ class FootswitchChord
             both_hold_sent_ = false;
         }
 
-        out.suppress_indiv = suppressed_;
         return out;
     }
 

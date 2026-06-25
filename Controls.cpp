@@ -30,11 +30,14 @@ ControlEvent Controls::Process()
     ev.enc_delta[4]  = enc5_.Poll();
     ev.enc1_click    = enc1_.RisingEdge();
     ev.enc1_long     = enc1_long_active && !enc1_long_was_active_;
-    // Tap fires on the rising edge only when a hold didn't already trigger.
-    ev.fs1_tap  = fs1_.RisingEdge() && !fs1_hold_was_active_;
-    ev.fs1_hold = fs1_hold_active   && !fs1_hold_was_active_;
-    ev.fs2_tap  = fs2_.RisingEdge() && !fs2_hold_was_active_;
-    ev.fs2_hold = fs2_hold_active   && !fs2_hold_was_active_;
+    // Tap fires on the RELEASE edge (not press), so the both-footswitch chord
+    // can suppress it: a press-edge tap escapes a debounce tick BEFORE the other
+    // switch reads Pressed(), so the chord never sees `both` in time. Releasing
+    // also means a hold (>kLongPressMs) already fired, so it isn't a tap.
+    ev.fs1_tap  = fs1_.FallingEdge() && !fs1_hold_was_active_;
+    ev.fs1_hold = fs1_hold_active    && !fs1_hold_was_active_;
+    ev.fs2_tap  = fs2_.FallingEdge() && !fs2_hold_was_active_;
+    ev.fs2_hold = fs2_hold_active    && !fs2_hold_was_active_;
 
     enc1_long_was_active_ = enc1_long_active;
     fs1_hold_was_active_  = fs1_hold_active;

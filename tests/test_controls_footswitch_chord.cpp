@@ -54,13 +54,15 @@ int main()
         CHECK(!c.Update(false, true, 5).suppress_indiv);
     }
 
-    // After a chord, suppression holds until BOTH release, then resets clean.
+    // After a chord, suppression holds until BOTH release, AND through the tick
+    // they release (taps fire on release — this swallows the release tap), then
+    // resets clean.
     {
         FootswitchChord c;
         c.Update(true, true, 350);                          // chord fires
         CHECK(c.Update(true, false, 360).suppress_indiv);   // one still down → suppressed
-        CHECK(!c.Update(false, false, 0).suppress_indiv);   // both up → reset
-        auto o = c.Update(true, false, 5);                  // fresh single press
+        CHECK(c.Update(false, false, 0).suppress_indiv);    // both release THIS tick → still suppressed
+        auto o = c.Update(true, false, 5);                  // fresh single press, after reset
         CHECK(!o.suppress_indiv);
         CHECK(!o.both_hold);
     }
