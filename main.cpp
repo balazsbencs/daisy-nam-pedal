@@ -37,7 +37,6 @@ static Ui            ui;
 static UsbHandle     usb_cdc;
 
 static BootloaderCommandParser bootloader_command_parser;
-static volatile bool            bootloader_requested = false;
 
 // ---------------------------------------------------------------------------
 // UI mode flags (mutually exclusive)
@@ -67,7 +66,7 @@ static void UsbReceiveCallback(uint8_t* buffer, uint32_t* length)
         return;
 
     if (bootloader_command_parser.Feed(buffer, *length) == BootloaderCommand::EnterBootloader)
-        bootloader_requested = true;
+        System::ResetToBootloader(System::BootloaderMode::DAISY_INFINITE_TIMEOUT);
 }
 
 static constexpr uint32_t kCbBudgetCyc   = 480000;
@@ -432,16 +431,6 @@ int main()
 
     for (;;)
     {
-        if (bootloader_requested)
-        {
-            bootloader_requested = false;
-            daisy_seed.PrintLine("NAM_DFU_BOOT ACK");
-            daisy_seed.PrintLine("Entering DaisyBoot DFU update mode...");
-            daisy_seed.StopAudio();
-            System::Delay(50);
-            System::ResetToBootloader(System::BootloaderMode::DAISY_INFINITE_TIMEOUT);
-        }
-
         ControlEvent ev = controls.Process();
 
         if (!browsing && !editing)
