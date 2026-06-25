@@ -22,7 +22,7 @@ IR_SRCS        = ../IRLoader.cpp ../PartitionedConvolver.cpp ../RealFft128.cpp
 PRESET_SRCS    = ../PresetManager.cpp
 MODEL_STUB_SRC = stub_impls/ModelManager_stub.cpp
 
-BINARIES = test_data_format test_qspi_storage test_preset_manager test_ir_loader test_eq3 test_audio_engine test_pedal_effects test_quad_encoder test_meter_fill test_real_fft_128 test_partitioned_convolver test_display_transfer test_ui_mode test_bootloader_command
+BINARIES = test_data_format test_qspi_storage test_preset_manager test_ir_loader test_eq3 test_audio_engine test_audio_engine_realtime_default test_pedal_effects test_quad_encoder test_meter_fill test_real_fft_128 test_partitioned_convolver test_display_transfer test_ui_mode test_bootloader_command
 
 .PHONY: all run clean
 
@@ -55,6 +55,9 @@ test_eq3: test_eq3.cpp $(EQ_SRCS)
 
 # AudioEngine EQ integration
 test_audio_engine: test_audio_engine.cpp $(AUDIO_SRCS)
+	$(CXX) $(CXXFLAGS) -DNAM_ENABLE_REALTIME_EFFECTS=1 $^ -o $@
+
+test_audio_engine_realtime_default: test_audio_engine_realtime_default.cpp $(AUDIO_SRCS)
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
 test_pedal_effects: test_pedal_effects.cpp $(EFFECT_SRCS)
@@ -96,6 +99,8 @@ run: all
 	./test_eq3
 	@echo "=== test_audio_engine ==="
 	./test_audio_engine
+	@echo "=== test_audio_engine_realtime_default ==="
+	./test_audio_engine_realtime_default
 	@echo "=== test_pedal_effects ==="
 	./test_pedal_effects
 	@echo "=== test_quad_encoder ==="

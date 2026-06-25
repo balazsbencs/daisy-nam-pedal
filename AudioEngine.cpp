@@ -29,8 +29,10 @@ void AudioEngine::Process(const float* in, float* out, size_t frames)
     for (size_t i = 0; i < frames; ++i)
         scratch_in_[i] = in[i] * gain;
 
+#if NAM_ENABLE_REALTIME_EFFECTS
     gate_.Process(scratch_in_, frames);
     compressor_.Process(scratch_in_, frames);
+#endif
 
     // NAM model stage.
     nam::DSP* model = active_model_.load();
@@ -52,8 +54,10 @@ void AudioEngine::Process(const float* in, float* out, size_t frames)
     if (ir)
         ir->Process(scratch_out_, scratch_out_, frames);
 
+#if NAM_ENABLE_REALTIME_EFFECTS
     eq_.Process(scratch_out_, frames);
     delay_.Process(scratch_out_, frames);
+#endif
 
     // Apply output volume and write result.
     for (size_t i = 0; i < frames; ++i)

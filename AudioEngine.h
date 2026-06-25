@@ -16,6 +16,10 @@
 #include <memory>
 #include <stddef.h>
 
+#ifndef NAM_ENABLE_REALTIME_EFFECTS
+#define NAM_ENABLE_REALTIME_EFFECTS 0
+#endif
+
 // Forward-declare so IRLoader.h can stay out of this header.
 class IIRConvolver;
 
