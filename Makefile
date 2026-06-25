@@ -7,6 +7,7 @@ SYSTEM_FILES_DIR = $(LIBDAISY_DIR)/core
 # --- project sources --------------------------------------------------------
 CPP_SOURCES = \
   main.cpp \
+  SdramHeap.cpp \
   NamEmbeddedStubs.cpp \
   BootloaderCommand.cpp \
   QspiStorage.cpp \
