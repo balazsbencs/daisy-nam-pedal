@@ -49,6 +49,11 @@ static bool    preset_dirty  = false; // unsaved live-edit changes
 // CPU diagnostics
 static volatile uint32_t cb_count   = 0;
 static volatile uint32_t cb_max_cyc = 0;
+
+// Heap split — how much of the active heap lives in SRAM vs spilled SDRAM
+// (defined in SdramHeap.cpp). Lets us confirm models land where expected.
+extern "C" volatile uint32_t g_sram_heap_used;
+extern "C" volatile uint32_t g_sdram_heap_used;
 static volatile float    diag_input_peak = 0.0f;
 static volatile float    diag_output_peak = 0.0f;
 static volatile float    diag_diff_peak = 0.0f;
@@ -747,7 +752,7 @@ int main()
             diag_input_peak = 0.0f;
             diag_output_peak = 0.0f;
             diag_diff_peak = 0.0f;
-            daisy_seed.PrintLine("cb=%lu  cpu_peak=%.3fms%s  in=%.4f  out=%.4f  diff=%.4f  gain=%.2f  vol=%.2f  bypass=%s",
+            daisy_seed.PrintLine("cb=%lu  cpu_peak=%.3fms%s  in=%.4f  out=%.4f  diff=%.4f  gain=%.2f  vol=%.2f  bypass=%s  heap=%luK/sdram=%luK",
                 (unsigned long)cb_count, cb_ms,
                 audio_overload ? "  !OVERLOAD" : "",
                 (double)input_peak,
@@ -755,7 +760,9 @@ int main()
                 (double)diff_peak,
                 (double)audio_engine.GetInputGain(),
                 (double)audio_engine.GetOutputVol(),
-                audio_engine.GetBypass() ? "Y" : "N");
+                audio_engine.GetBypass() ? "Y" : "N",
+                (unsigned long)(g_sram_heap_used / 1024),
+                (unsigned long)(g_sdram_heap_used / 1024));
             cb_max_cyc   = 0;
             last_diag_ms = now;
         }
