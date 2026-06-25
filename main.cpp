@@ -397,7 +397,9 @@ int main()
         daisy_seed.PrintLine("Init display...");
         ui.Init();
         PushPerformanceScreen();
-        ui.Update(); // first frame (blocking)
+        ui.Update();
+        while (ui.IsBusy())
+            ui.Update();
         daisy_seed.PrintLine("First frame pushed.");
     }
     else
