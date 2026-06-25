@@ -33,8 +33,7 @@ CPP_SOURCES = \
   NeuralAmpModelerCore/NAM/ring_buffer.cpp \
   NeuralAmpModelerCore/NAM/util.cpp \
   NeuralAmpModelerCore/NAM/wavenet/model.cpp \
-  NeuralAmpModelerCore/NAM/wavenet/a2_fast.cpp \
-  NeuralAmpModelerCore/NAM/wavenet/slimmable.cpp
+  NeuralAmpModelerCore/NAM/wavenet/a2_fast.cpp
 
 # display stack from the user's other project (copy or symlink ./display/)
 # Uncomment when you drop the files in:
@@ -66,6 +65,7 @@ C_DEFS = \
   -DNAM_SAMPLE_FLOAT \
   -DNAM_USE_INLINE_GEMM \
   -DNAM_ENABLE_A2_FAST \
+  -DNAM_DISABLE_SLIMMABLE_WAVENET \
   -D__ARM_ARCH_7EM__ \
   -DUSE_ARM_DSP \
   -DARM_DSP_CONFIG_TABLES \
