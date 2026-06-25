@@ -62,4 +62,14 @@ std::unique_ptr<DSP> get_dsp(dspData& conf, DspLoadOptions)
   throw std::runtime_error("JSON model loading not supported on embedded targets.");
 }
 
+std::unique_ptr<DSP> get_dsp(const nlohmann::json&, dspData&, DspLoadOptions)
+{
+  throw std::runtime_error("JSON model loading not supported on embedded targets.");
+}
+
+std::unique_ptr<DSP> get_dsp(const nlohmann::json&, DspLoadOptions)
+{
+  throw std::runtime_error("JSON model loading not supported on embedded targets.");
+}
+
 } // namespace nam

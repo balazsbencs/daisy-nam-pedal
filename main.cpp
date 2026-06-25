@@ -14,7 +14,9 @@
 #include "IRLoader.h"
 #include "ModelManager.h"
 #include "PresetManager.h"
+#include "QspiDataProgrammer.h"
 #include "QspiStorage.h"
+#include "RamFunc.h"
 #include "Ui.h"
 #include "ui_mode.h"
 #include <cstring>
@@ -311,6 +313,7 @@ int main()
 {
     // --- Hardware init -------------------------------------------------------
     daisy_seed.Init(true); // 480 MHz boost; full NAM DSP does not fit at 400 MHz.
+    CopyRamFuncs();
 
     uint32_t fpscr = __get_FPSCR();
     fpscr |= (1U << 24) | (1U << 25);
@@ -319,6 +322,9 @@ int main()
 
     daisy_seed.StartLog(false);
     daisy_seed.PrintLine("NamPlatform booting...");
+    daisy_seed.PrintLine("ramfunc probe addr=%s value=0x%08lx",
+                         QspiProgrammerRamProbeAddressOk() ? "OK" : "BAD",
+                         (unsigned long)QspiProgrammerRamProbeAdd(1, 2));
     // DIAGNOSTIC: 0=DAISY_SEED(AK4556) 1=DAISY_SEED_1_1(WM8731) 2=SEED_2_DFM
     daisy_seed.PrintLine("Board version: %d", (int)daisy_seed.CheckBoardVersion());
 
