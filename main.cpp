@@ -477,8 +477,10 @@ int main()
         // --- Tuner mode (takes over the loop while active) ------------------
         if (tuner_active)
         {
-            // Any footswitch gesture exits back to performance mode.
-            if (ev.fs_both_hold || ev.fs1_tap || ev.fs2_tap)
+            // Both-footswitch chord toggles back to performance mode. (Individual
+            // taps are ignored so the chord's trailing release edge can't bounce
+            // us straight back out.)
+            if (ev.fs_both_hold)
             {
                 tuner_active = false;       // stop the IRQ pushing first
                 tuner_detector.Reset();

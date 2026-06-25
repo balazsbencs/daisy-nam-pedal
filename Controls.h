@@ -38,5 +38,10 @@ private:
     bool fs1_hold_was_active_  = false;
     bool fs2_hold_was_active_  = false;
 
+    // After a chord, eat each switch's trailing release tap (FallingEdge lags
+    // Pressed() by several debounce ticks, so it escapes the chord's window).
+    bool eat_fs1_release_ = false;
+    bool eat_fs2_release_ = false;
+
     FootswitchChord chord_;
 };

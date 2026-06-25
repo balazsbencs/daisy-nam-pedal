@@ -34,10 +34,12 @@ ControlEvent Controls::Process()
     // can suppress it: a press-edge tap escapes a debounce tick BEFORE the other
     // switch reads Pressed(), so the chord never sees `both` in time. Releasing
     // also means a hold (>kLongPressMs) already fired, so it isn't a tap.
-    ev.fs1_tap  = fs1_.FallingEdge() && !fs1_hold_was_active_;
-    ev.fs1_hold = fs1_hold_active    && !fs1_hold_was_active_;
-    ev.fs2_tap  = fs2_.FallingEdge() && !fs2_hold_was_active_;
-    ev.fs2_hold = fs2_hold_active    && !fs2_hold_was_active_;
+    const bool fs1_fall = fs1_.FallingEdge();
+    const bool fs2_fall = fs2_.FallingEdge();
+    ev.fs1_tap  = fs1_fall && !fs1_hold_was_active_;
+    ev.fs1_hold = fs1_hold_active && !fs1_hold_was_active_;
+    ev.fs2_tap  = fs2_fall && !fs2_hold_was_active_;
+    ev.fs2_hold = fs2_hold_active && !fs2_hold_was_active_;
 
     enc1_long_was_active_ = enc1_long_active;
     fs1_hold_was_active_  = fs1_hold_active;
@@ -59,10 +61,16 @@ ControlEvent Controls::Process()
     ev.fs_both_hold          = chord.both_hold;
     if (chord.suppress_indiv)
     {
-        // ponytail: a deliberate stomp lands both switches within one tick, so
-        // taps suppress cleanly. Feet staggered by >1 tick leak the first tap
-        // (advances one preset). Upgrade path: defer taps to release edge.
         ev.fs1_tap = ev.fs1_hold = ev.fs2_tap = ev.fs2_hold = false;
+        // Each switch still emits a release (FallingEdge) tap when it comes up,
+        // but FallingEdge lands ~7 debounce ticks AFTER Pressed() drops (plus
+        // contact bounce) — i.e. after the chord has already reset. Latch it so
+        // each switch's trailing release tap is eaten and never leaks a preset
+        // change when the chord ends.
+        eat_fs1_release_ = true;
+        eat_fs2_release_ = true;
     }
+    if (fs1_fall && eat_fs1_release_) { ev.fs1_tap = false; eat_fs1_release_ = false; }
+    if (fs2_fall && eat_fs2_release_) { ev.fs2_tap = false; eat_fs2_release_ = false; }
     return ev;
 }
