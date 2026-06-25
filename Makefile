@@ -8,9 +8,8 @@ SYSTEM_FILES_DIR = $(LIBDAISY_DIR)/core
 CPP_SOURCES = \
   main.cpp \
   NamEmbeddedStubs.cpp \
-  RamFunc.cpp \
+  BootloaderCommand.cpp \
   QspiStorage.cpp \
-  QspiDataProgrammer.cpp \
   AudioEngine.cpp \
   Eq3.cpp \
   PedalEffects.cpp \
@@ -89,15 +88,6 @@ include $(SYSTEM_FILES_DIR)/Makefile
 
 CPPFLAGS += -fexceptions -ffast-math -funroll-loops -ftree-vectorize \
             -fmove-loop-invariants
-
-RAMFUNC_CPPFLAGS = $(filter-out -fexceptions,$(CPPFLAGS)) \
-                   -fno-exceptions -fno-unwind-tables -fno-asynchronous-unwind-tables
-
-$(BUILD_DIR)/RamFunc.o: RamFunc.cpp Makefile | $(BUILD_DIR)
-	$(CXX) -c $(RAMFUNC_CPPFLAGS) $(CPP_STANDARD) -Wa,-a,-ad,-alms=$(BUILD_DIR)/RamFunc.lst $< -o $@
-
-$(BUILD_DIR)/QspiDataProgrammer.o: QspiDataProgrammer.cpp Makefile | $(BUILD_DIR)
-	$(CXX) -c $(RAMFUNC_CPPFLAGS) $(CPP_STANDARD) -Wa,-a,-ad,-alms=$(BUILD_DIR)/QspiDataProgrammer.lst $< -o $@
 
 # ---------------------------------------------------------------------------
 # Data image — pack default models, IRs, and presets into a QSPI flash image.

@@ -14,11 +14,12 @@
 #include "IRLoader.h"
 #include "ModelManager.h"
 #include "PresetManager.h"
-#include "QspiDataProgrammer.h"
+#include "BootloaderCommand.h"
 #include "QspiStorage.h"
-#include "RamFunc.h"
 #include "Ui.h"
 #include "ui_mode.h"
+#include "hid/usb.h"
+#include "sys/system.h"
 #include <cstring>
 
 using namespace daisy;
@@ -33,6 +34,10 @@ static ModelManager  models;
 static PresetManager presets;
 static Controls      controls;
 static Ui            ui;
+static UsbHandle     usb_cdc;
+
+static BootloaderCommandParser bootloader_command_parser;
+static volatile bool            bootloader_requested = false;
 
 // ---------------------------------------------------------------------------
 // UI mode flags (mutually exclusive)
@@ -55,6 +60,15 @@ static volatile float    diag_diff_peak = 0.0f;
 static constexpr uint8_t kAudioDiagMode = 0;
 static constexpr bool    kDisplayEnabled = true;
 static constexpr bool    kDisableIrForTiming = false;
+
+static void UsbReceiveCallback(uint8_t* buffer, uint32_t* length)
+{
+    if (buffer == nullptr || length == nullptr)
+        return;
+
+    if (bootloader_command_parser.Feed(buffer, *length) == BootloaderCommand::EnterBootloader)
+        bootloader_requested = true;
+}
 
 static constexpr uint32_t kCbBudgetCyc   = 480000;
 static constexpr uint32_t kCbOverloadCyc = (kCbBudgetCyc * 9) / 10;
@@ -313,7 +327,6 @@ int main()
 {
     // --- Hardware init -------------------------------------------------------
     daisy_seed.Init(true); // 480 MHz boost; full NAM DSP does not fit at 400 MHz.
-    CopyRamFuncs();
 
     uint32_t fpscr = __get_FPSCR();
     fpscr |= (1U << 24) | (1U << 25);
@@ -321,10 +334,8 @@ int main()
     *reinterpret_cast<volatile uint32_t*>(0xE000EF3Cu) |= (1U << 24) | (1U << 25);
 
     daisy_seed.StartLog(false);
+    usb_cdc.SetReceiveCallback(UsbReceiveCallback, UsbHandle::FS_INTERNAL);
     daisy_seed.PrintLine("NamPlatform booting...");
-    daisy_seed.PrintLine("ramfunc probe addr=%s value=0x%08lx",
-                         QspiProgrammerRamProbeAddressOk() ? "OK" : "BAD",
-                         (unsigned long)QspiProgrammerRamProbeAdd(1, 2));
     // DIAGNOSTIC: 0=DAISY_SEED(AK4556) 1=DAISY_SEED_1_1(WM8731) 2=SEED_2_DFM
     daisy_seed.PrintLine("Board version: %d", (int)daisy_seed.CheckBoardVersion());
 
@@ -419,6 +430,16 @@ int main()
 
     for (;;)
     {
+        if (bootloader_requested)
+        {
+            bootloader_requested = false;
+            daisy_seed.PrintLine("NAM_DFU_BOOT ACK");
+            daisy_seed.PrintLine("Entering DaisyBoot DFU update mode...");
+            daisy_seed.StopAudio();
+            System::Delay(50);
+            System::ResetToBootloader(System::BootloaderMode::DAISY_INFINITE_TIMEOUT);
+        }
+
         ControlEvent ev = controls.Process();
 
         if (!browsing && !editing)

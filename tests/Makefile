@@ -22,7 +22,7 @@ IR_SRCS        = ../IRLoader.cpp ../PartitionedConvolver.cpp ../RealFft128.cpp
 PRESET_SRCS    = ../PresetManager.cpp
 MODEL_STUB_SRC = stub_impls/ModelManager_stub.cpp
 
-BINARIES = test_data_format test_qspi_storage test_preset_manager test_ir_loader test_eq3 test_audio_engine test_pedal_effects test_quad_encoder test_meter_fill test_real_fft_128 test_partitioned_convolver test_display_transfer test_ui_mode
+BINARIES = test_data_format test_qspi_storage test_preset_manager test_ir_loader test_eq3 test_audio_engine test_pedal_effects test_quad_encoder test_meter_fill test_real_fft_128 test_partitioned_convolver test_display_transfer test_ui_mode test_bootloader_command
 
 .PHONY: all run clean
 
@@ -80,6 +80,9 @@ test_display_transfer: test_display_transfer.cpp
 test_ui_mode: test_ui_mode.cpp ../ui_mode.h
 	$(CXX) $(CXXFLAGS) $< -o $@
 
+test_bootloader_command: test_bootloader_command.cpp ../BootloaderCommand.cpp ../BootloaderCommand.h
+	$(CXX) $(CXXFLAGS) test_bootloader_command.cpp ../BootloaderCommand.cpp -o $@
+
 run: all
 	@echo "=== TEST-01: data_format ==="
 	./test_data_format
@@ -107,6 +110,8 @@ run: all
 	./test_display_transfer
 	@echo "=== test_ui_mode ==="
 	./test_ui_mode
+	@echo "=== test_bootloader_command ==="
+	./test_bootloader_command
 	@echo "=== TEST-11: tools (Python) ==="
 	python3 test_tools.py
 
