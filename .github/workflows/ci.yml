@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-firmware:
+    name: Build Firmware
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install ARM toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            gcc-arm-none-eabi \
+            binutils-arm-none-eabi \
+            libnewlib-arm-none-eabi \
+            libstdc++-arm-none-eabi-newlib
+
+      - name: Get submodule commit hashes
+        id: submodule-hashes
+        run: |
+          echo "libdaisy=$(git rev-parse HEAD:third_party/libDaisy)" >> $GITHUB_OUTPUT
+          echo "daisysp=$(git rev-parse HEAD:third_party/DaisySP)"   >> $GITHUB_OUTPUT
+
+      - name: Cache libDaisy build
+        id: cache-libdaisy
+        uses: actions/cache@v4
+        with:
+          path: third_party/libDaisy/build
+          key: libdaisy-ubuntu-${{ steps.submodule-hashes.outputs.libdaisy }}
+
+      - name: Build libDaisy
+        if: steps.cache-libdaisy.outputs.cache-hit != 'true'
+        run: make -C third_party/libDaisy -j$(nproc)
+
+      - name: Cache DaisySP build
+        id: cache-daisysp
+        uses: actions/cache@v4
+        with:
+          path: third_party/DaisySP/build
+          key: daisysp-ubuntu-${{ steps.submodule-hashes.outputs.daisysp }}
+
+      - name: Build DaisySP
+        if: steps.cache-daisysp.outputs.cache-hit != 'true'
+        run: make -C third_party/DaisySP -j$(nproc)
+
+      - name: Build firmware
+        run: make -j$(nproc)
+
+      - name: Print flash/RAM usage
+        run: arm-none-eabi-size build/NamPlatform.elf
