@@ -1,0 +1,20 @@
+diff --git a/core/STM32H750IB_qspi.lds b/core/STM32H750IB_qspi.lds
+index 8e3eb131..57da3abe 100644
+--- a/core/STM32H750IB_qspi.lds
++++ b/core/STM32H750IB_qspi.lds
+@@ -52,7 +52,7 @@ SECTIONS
+ 	.ARM.extab :
+ 	{
+ 		. = ALIGN(4);
+-		*(.ARM.extab)
++		*(.ARM.extab*)
+ 		*(.gnu.linkonce.armextab.*)
+ 		. = ALIGN(4);
+ 	} > QSPIFLASH
+@@ -267,4 +267,4 @@ SECTIONS
+         libgcc.a ( * )
+     }
+ 
+-}
+\ No newline at end of file
++}

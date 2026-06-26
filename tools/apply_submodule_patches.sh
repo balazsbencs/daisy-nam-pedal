@@ -39,7 +39,9 @@ apply_patch() {
 check_input NeuralAmpModelerCore NeuralAmpModelerCore.patch
 check_input nam-binary-loader nam-binary-loader.patch
 check_input third_party/DaisySP DaisySP.patch
+check_input third_party/libDaisy libDaisy.patch
 
 apply_patch NeuralAmpModelerCore NeuralAmpModelerCore.patch
 apply_patch nam-binary-loader nam-binary-loader.patch
 apply_patch third_party/DaisySP DaisySP.patch
+apply_patch third_party/libDaisy libDaisy.patch

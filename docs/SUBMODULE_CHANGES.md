@@ -1,6 +1,6 @@
 # Maintained Submodule Changes
 
-This project carries source-level adaptations to three upstream submodules. The
+This project carries source-level adaptations to four upstream submodules. The
 upstream URLs and pinned commits remain unchanged; the durable adaptations live
 in `patches/submodules/` and are installed by
 `tools/apply_submodule_patches.sh`.
@@ -125,6 +125,18 @@ realtime IR path uses this repository's partitioned FFT convolver instead. When
 updating DaisySP, check whether upstream fixed the include and whether any current
 code still includes `fir.h` directly. Remove this patch if neither the current
 firmware nor planned code requires it.
+
+## libDaisy
+
+Patch: `patches/submodules/libDaisy.patch`
+
+Affected file: `core/STM32H750IB_qspi.lds`
+
+The QSPI linker script kept only `.ARM.extab` but discarded the
+compiler-generated `.ARM.extab.*` variants, dropping exception-unwinding tables
+for QSPI-resident code. The patch widens the glob to `.ARM.extab*` so all extab
+sections are retained. Retire this patch when upstream's QSPI linker script keeps
+the wildcard variants itself.
 
 ## Updating a patched submodule
 
