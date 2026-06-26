@@ -104,13 +104,9 @@ jobs:
         run: sh tools/apply_submodule_patches.sh
 
       - name: Install ARM toolchain
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            gcc-arm-none-eabi \
-            binutils-arm-none-eabi \
-            libnewlib-arm-none-eabi \
-            libstdc++-arm-none-eabi-newlib
+        uses: carlosperate/arm-none-eabi-gcc-action@v1
+        with:
+          release: '15.2.Rel1'  # official Arm toolchain; apt's gcc-arm-none-eabi newlib-nano is missing __ssputws_r
 
       - name: Get submodule commit hashes
         id: submodule-hashes
@@ -123,7 +119,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: third_party/libDaisy/build
-          key: libdaisy-ubuntu-${{ steps.submodule-hashes.outputs.libdaisy }}
+          key: libdaisy-ubuntu-${{ steps.submodule-hashes.outputs.libdaisy }}-arm15.2.Rel1
 
       - name: Build libDaisy
         if: steps.cache-libdaisy.outputs.cache-hit != 'true'
@@ -134,7 +130,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: third_party/DaisySP/build
-          key: daisysp-ubuntu-${{ steps.submodule-hashes.outputs.daisysp }}
+          key: daisysp-ubuntu-${{ steps.submodule-hashes.outputs.daisysp }}-arm15.2.Rel1
 
       - name: Build DaisySP
         if: steps.cache-daisysp.outputs.cache-hit != 'true'
