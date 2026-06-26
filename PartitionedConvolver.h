@@ -9,8 +9,8 @@ class PartitionedConvolver
   public:
     static constexpr size_t kBlockSize     = 48;
     static constexpr size_t kFftSize       = 128;
-    static constexpr size_t kMaxTaps       = 512;
-    static constexpr size_t kMaxPartitions = 11;
+    static constexpr size_t kMaxTaps       = 256;
+    static constexpr size_t kMaxPartitions = 6;   // ceil(kMaxTaps / kBlockSize)
     static constexpr size_t kOverlapSize   = 47;
 
     bool Init(const float* ir, size_t tap_count);

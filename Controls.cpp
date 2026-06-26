@@ -24,10 +24,10 @@ ControlEvent Controls::Process()
 
     ControlEvent ev;
     ev.enc_delta[0]  = static_cast<int8_t>(enc1_.Increment());
-    ev.enc_delta[1]  = enc2_.Poll();
-    ev.enc_delta[2]  = enc3_.Poll();
-    ev.enc_delta[3]  = enc4_.Poll();
-    ev.enc_delta[4]  = enc5_.Poll();
+    ev.enc_delta[1]  = enc2_.Drain();
+    ev.enc_delta[2]  = enc3_.Drain();
+    ev.enc_delta[3]  = enc4_.Drain();
+    ev.enc_delta[4]  = enc5_.Drain();
     ev.enc1_click    = enc1_.RisingEdge();
     ev.enc1_long     = enc1_long_active && !enc1_long_was_active_;
     // Tap fires on the RELEASE edge (not press), so the both-footswitch chord
@@ -73,4 +73,12 @@ ControlEvent Controls::Process()
     if (fs1_fall && eat_fs1_release_) { ev.fs1_tap = false; eat_fs1_release_ = false; }
     if (fs2_fall && eat_fs2_release_) { ev.fs2_tap = false; eat_fs2_release_ = false; }
     return ev;
+}
+
+void Controls::PollEncodersIsr()
+{
+    enc2_.PollIsr();
+    enc3_.PollIsr();
+    enc4_.PollIsr();
+    enc5_.PollIsr();
 }

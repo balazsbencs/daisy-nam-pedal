@@ -29,6 +29,11 @@ public:
     // Call once per main-loop iteration; returns events since last call.
     ControlEvent Process();
 
+    // Call from the audio ISR (steady rate): samples the Bass/Mid/Treble/Vol
+    // quadrature encoders so detents aren't dropped when the main loop stalls
+    // on display work. Steps accumulate until Process() drains them.
+    void PollEncodersIsr();
+
 private:
     daisy::Switch   fs1_, fs2_;
     daisy::Encoder  enc1_;

@@ -47,6 +47,10 @@ public:
     void SetOutputVol(float v)  { output_vol_.store(v);  }
     void SetBypass(bool b)      { bypass_.store(b);      }
 
+    // Output silence and skip all DSP. Used to hide the model/IR rebuild glitch
+    // during a preset change (the callback stays trivial, so no overload).
+    void SetMuted(bool m)       { muted_.store(m);       }
+
     // Update one EQ band (main loop only). gain in dB, freq in Hz.
     void  SetEqBand(Eq3::Band b, float gain_db, float freq_hz) { eq_.SetBand(b, gain_db, freq_hz); }
     float GetEqGain(Eq3::Band b) const { return eq_.GetGainDb(b); }
@@ -88,6 +92,7 @@ private:
     std::atomic<float> input_gain_{1.0f};
     std::atomic<float> output_vol_{1.0f};
     std::atomic<bool>  bypass_{true};
+    std::atomic<bool>  muted_{false};
 
     Eq3 eq_;
     NoiseGate gate_;

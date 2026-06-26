@@ -240,8 +240,9 @@ def main():
     ap.add_argument(
         "--max-taps",
         type=int,
-        default=512,
-        help="trim IRs to at most this many taps (0 = no limit; default 512)",
+        default=256,
+        help="trim IRs to at most this many taps (0 = no limit; default 256, "
+        "matching PartitionedConvolver::kMaxTaps in firmware)",
     )
     args = ap.parse_args()
 

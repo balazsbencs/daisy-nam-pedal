@@ -15,13 +15,16 @@ void QuadEncoder::Init(daisy::Pin pin_a, daisy::Pin pin_b)
     gpio_b_.Init(cfg);
     ah_ = 0xFFu;
     bh_ = 0xFFu;
+    accum_.store(0, std::memory_order_relaxed);
 }
 
-int8_t QuadEncoder::Poll()
+void QuadEncoder::PollIsr()
 {
     uint8_t a = gpio_a_.Read() ? 1u : 0u;
     uint8_t b = gpio_b_.Read() ? 1u : 0u;
-    return quad_decode(ah_, bh_, a, b);
+    int8_t d = quad_decode(ah_, bh_, a, b);
+    if (d)
+        accum_.fetch_add(d, std::memory_order_relaxed);
 }
 
 } // namespace pedal

@@ -81,5 +81,8 @@ private:
     size_t delay_samples_ = 16800;
     size_t write_idx_ = 0;
     bool enabled_ = false;
-    float buffer_[kMaxDelaySamples] = {};
+    // Backing store lives in SDRAM (see PedalEffects.cpp) to keep this 144 KB
+    // out of SRAM — that space is needed so the NAM model arena stays in fast
+    // SRAM across preset reloads. Set in Init().
+    float* buffer_ = nullptr;
 };

@@ -2,6 +2,13 @@
 #include "Eq3.h"
 #include <cstring>
 
+// Temporary: globally disable IR load + convolution to test whether the IR
+// (build cost on switch and/or per-block convolution) is what starves the CPU.
+// Set via -DNAM_DISABLE_IR=1 in the Makefile. Remove once diagnosed.
+#ifndef NAM_DISABLE_IR
+#define NAM_DISABLE_IR 0
+#endif
+
 static constexpr uint32_t NAM_LEGACY_PRESET_SIZE = 74;
 
 // Substitute default frequency when a stored value is absent (zero).
@@ -78,6 +85,10 @@ void PresetManager::ApplyPreset(const NamPreset& p,
                                 ModelManager& models,
                                 float sample_rate, size_t block_size)
 {
+    // Silence output while we rebuild the model + IR (heavy main-loop work);
+    // unmuted at the end so the switch is a brief gap, not a glitch/overload.
+    engine.SetMuted(true);
+
     engine.SetBypass(p.bypass != 0);
     engine.SetInputGain(p.input_gain);
     engine.SetOutputVol(p.output_volume);
@@ -118,8 +129,11 @@ void PresetManager::ApplyPreset(const NamPreset& p,
             engine.SetBypass(true);
     }
 
-    // Load IR by name (or null = bypass).
+    // Load IR by name (or null = bypass). When NAM_DISABLE_IR is set, never
+    // build or install an IR — new_ir stays null, so SwapIR frees any previous
+    // one and Process skips the convolution entirely.
     IIRConvolver* new_ir = nullptr;
+#if !NAM_DISABLE_IR
     if (p.ir_name[0] != '\0')
     {
         const NamDataEntry* ir_entry = storage.FindEntry(NAM_ENTRY_IR, p.ir_name);
@@ -129,10 +143,13 @@ void PresetManager::ApplyPreset(const NamPreset& p,
             new_ir = conv.release();
         }
     }
+#endif
 
     IIRConvolver* old_ir = engine.SwapIR(new_ir);
     delete old_ir;
     current_ir_ = new_ir;
+
+    engine.SetMuted(false);
 }
 
 void PresetManager::Apply(AudioEngine& engine, QspiStorage& storage,

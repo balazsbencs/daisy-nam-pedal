@@ -98,7 +98,14 @@ void Ui::ShowTuner(const TunerState& s)
 
 void Ui::Update()
 {
-    driver_.Service();
+    // Push a batch of rows per call instead of one. A frame is 320 rows; at one
+    // row per main-loop iteration the per-iteration overhead dominated the push.
+    // This is safe now that the EQ/Vol encoders are sampled in the audio ISR —
+    // blocking the main loop ~1 ms per batch no longer drops detents. Footswitch
+    // / nav polling still happens between batches.
+    static constexpr int kRowsPerUpdate = 16;
+    for (int i = 0; i < kRowsPerUpdate && driver_.IsBusy(); ++i)
+        driver_.Service();
     if (driver_.IsBusy())
         return;
     if (!dirty_)

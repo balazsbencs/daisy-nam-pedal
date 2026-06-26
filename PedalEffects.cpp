@@ -3,6 +3,18 @@
 #include <cmath>
 #include <cstring>
 
+// Delay backing store, placed in external SDRAM (.sdram_bss is NOLOAD, so it is
+// NOT auto-zeroed — DelayLine::Init/Reset memset it before use). Keeping this
+// 144 KB out of SRAM leaves room for the NAM model arena to stay in fast SRAM
+// when a preset reloads the model (otherwise it spills to SDRAM and the model
+// runs ~40% slower, blowing the audio deadline). One global instance — there is
+// exactly one DelayLine in the engine.
+#ifdef HOST_BUILD
+static float s_delay_buffer[DelayLine::kMaxDelaySamples];
+#else
+static float s_delay_buffer[DelayLine::kMaxDelaySamples] __attribute__((section(".sdram_bss")));
+#endif
+
 static inline float clampf(float v, float lo, float hi)
 {
     return v < lo ? lo : (v > hi ? hi : v);
@@ -116,6 +128,7 @@ void Compressor::Process(float* buf, size_t n)
 
 void DelayLine::Init(float sample_rate)
 {
+    buffer_ = s_delay_buffer;   // SDRAM backing store
     sample_rate_ = sample_rate > 1000.0f ? sample_rate : 48000.0f;
     SetParams(time_ms_, repeats_, mix_, tone_);
     Reset();
@@ -141,14 +154,15 @@ void DelayLine::SetParams(float time_ms, float repeats, float mix, float tone)
 
 void DelayLine::Reset()
 {
-    std::memset(buffer_, 0, sizeof(buffer_));
+    if (buffer_)
+        std::memset(buffer_, 0, kMaxDelaySamples * sizeof(float));
     write_idx_ = 0;
     tone_state_ = 0.0f;
 }
 
 void DelayLine::Process(float* buf, size_t n)
 {
-    if (!enabled_) return;
+    if (!enabled_ || !buffer_) return;
 
     for (size_t i = 0; i < n; ++i)
     {

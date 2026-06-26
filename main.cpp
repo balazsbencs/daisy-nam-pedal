@@ -12,6 +12,7 @@
 #include "Controls.h"
 #include "Eq3.h"
 #include "IRLoader.h"
+#include "RealFft128.h"
 #include "ModelManager.h"
 #include "PresetManager.h"
 #include "BootloaderCommand.h"
@@ -126,6 +127,10 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     static float tone_phase = 0.0f;
     static uint32_t diag_frame = 0;
 
+    // Sample the EQ/Vol encoders at the steady 1 kHz block rate so detents are
+    // never dropped by main-loop/display stalls. Runs before any early return.
+    controls.PollEncodersIsr();
+
     float mono_in[hw::AUDIO_BLOCK_SIZE];
     float mono_out[hw::AUDIO_BLOCK_SIZE];
     for (size_t i = 0; i < frames; ++i)
@@ -210,6 +215,21 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// Diagnostic: report what the just-applied preset actually resolved to. If the
+// chip freezes right AFTER this prints, the fault is in live processing of this
+// model/IR (most likely an unsupported model architecture), not in Apply().
+static void LogActivePreset()
+{
+    const NamPreset& p = presets.ActivePreset();
+    const bool model_failed = p.model_name[0] && !audio_engine.HasModel();
+    daisy_seed.PrintLine("  resolved: model=%s ir=%s  modelLive=%d  bypass=%d%s",
+        p.model_name[0] ? p.model_name : "(none)",
+        p.ir_name[0]    ? p.ir_name    : "(off)",
+        audio_engine.HasModel() ? 1 : 0,
+        audio_engine.GetBypass() ? 1 : 0,
+        model_failed ? "  <-- model unsupported (not a 3ch A2 nano), bypassed" : "");
+}
 
 static void BuildNamePointers()
 {
@@ -383,6 +403,13 @@ int main()
     DWT->CTRL  |= DWT_CTRL_CYCCNTENA_Msk;
 
     // --- QSPI storage --------------------------------------------------------
+    // IR convolution depends on CMSIS RFFT-128. If the FFT tables aren't linked
+    // (wrong ARM_TABLE_* defines), init fails and every IR is silently bypassed.
+    { RealFft128 probe; daisy_seed.PrintLine("FFT-128 init: %s", probe.Init() ? "OK" : "FAILED — IR bypassed"); }
+#if defined(NAM_DISABLE_IR) && NAM_DISABLE_IR
+    daisy_seed.PrintLine("IR globally DISABLED (NAM_DISABLE_IR) — CPU bisect build.");
+#endif
+
     daisy_seed.PrintLine("Init storage...");
     if (storage.Init() != QspiStorage::Status::OK)
         daisy_seed.PrintLine("WARNING: data partition missing — flash a data image first.");
@@ -575,6 +602,7 @@ int main()
                 PushPerformanceScreen();
                 daisy_seed.PrintLine("Preset -> %u: %s",
                              (unsigned)presets.Current(), presets.Name(presets.Current()));
+                LogActivePreset();
             }
             else if (ev.fs2_tap && presets.Count() > 1)
             {
@@ -585,6 +613,7 @@ int main()
                 PushPerformanceScreen();
                 daisy_seed.PrintLine("Preset -> %u: %s",
                              (unsigned)presets.Current(), presets.Name(presets.Current()));
+                LogActivePreset();
             }
 
             if (ev.fs1_hold)

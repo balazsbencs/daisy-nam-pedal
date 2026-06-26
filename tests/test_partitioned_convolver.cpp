@@ -51,9 +51,9 @@ static void check_close(const std::vector<float>& actual,
         CHECK(std::fabs(actual[i] - expected[i]) < 1e-4f);
 }
 
-static void test_complete_512_tap_impulse_response()
+static void test_complete_max_tap_impulse_response()
 {
-    std::vector<float> ir(512);
+    std::vector<float> ir(PartitionedConvolver::kMaxTaps);
     for(size_t i = 0; i < ir.size(); ++i)
         ir[i] = static_cast<float>((static_cast<int>(i % 17) - 8) * 0.002);
 
@@ -98,10 +98,10 @@ static void test_reset_clears_history()
 
 static void test_in_place_matches_reference()
 {
-    std::vector<float> ir(512, 0.0f);
+    std::vector<float> ir(PartitionedConvolver::kMaxTaps, 0.0f);
     ir[0] = 0.8f;
     ir[127] = -0.2f;
-    ir[511] = 0.1f;
+    ir[PartitionedConvolver::kMaxTaps - 1] = 0.1f;
     std::vector<float> input(1152);
     for(size_t i = 0; i < input.size(); ++i)
         input[i] = static_cast<float>((static_cast<int>(i % 23) - 11) * 0.01);
@@ -113,7 +113,7 @@ static void test_in_place_matches_reference()
 
 int main()
 {
-    test_complete_512_tap_impulse_response();
+    test_complete_max_tap_impulse_response();
     test_arbitrary_signal_and_non_aligned_ir();
     test_reset_clears_history();
     test_in_place_matches_reference();

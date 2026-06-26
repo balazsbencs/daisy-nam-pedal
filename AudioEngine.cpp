@@ -13,6 +13,14 @@ void AudioEngine::Init(size_t block_size, float sample_rate)
 
 void AudioEngine::Process(const float* in, float* out, size_t frames)
 {
+    if (muted_.load())
+    {
+        // Preset change in progress — output silence, run no DSP.
+        for (size_t i = 0; i < frames; ++i)
+            out[i] = 0.0f;
+        return;
+    }
+
     float gain = input_gain_.load();
     float vol  = output_vol_.load();
     bool  bp   = bypass_.load();

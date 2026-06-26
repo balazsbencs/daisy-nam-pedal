@@ -33,7 +33,7 @@ public:
 class FirConvolver : public IIRConvolver
 {
 public:
-    static constexpr size_t kMaxTaps  = 512;
+    static constexpr size_t kMaxTaps  = 256;
     static constexpr size_t kMaxBlock = 48;
 
     // ir: float32 taps, tap_count ≤ kMaxTaps
