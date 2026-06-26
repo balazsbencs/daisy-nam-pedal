@@ -19,6 +19,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Apply submodule patches
+        run: sh tools/apply_submodule_patches.sh
+
       - name: Install ARM toolchain
         run: |
           sudo apt-get update -qq

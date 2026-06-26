@@ -22,6 +22,7 @@ Usage:
 
 import argparse
 import json
+import math
 import os
 import struct
 import sys
@@ -121,6 +122,36 @@ def read_wav_mono_float(path):
     return out, rate
 
 
+def peak_response_gain(samples):
+    """Worst-case linear gain the IR convolution applies = max |H(f)| over the
+    spectrum. Pure-python DFT (no numpy, to match this tool's deps); only the
+    handful of packed IRs run through it, so O(bins*taps) is fine.
+    """
+    n = len(samples)
+    if n == 0:
+        return 0.0
+    bins = min(n, 512)  # ample resolution to catch a cab's resonant peak
+    peak = 0.0
+    for b in range(bins + 1):
+        w = math.pi * b / bins  # DC (0) .. Nyquist (pi)
+        re = im = 0.0
+        for k, h in enumerate(samples):
+            a = w * k
+            re += h * math.cos(a)
+            im -= h * math.sin(a)
+        peak = max(peak, math.hypot(re, im))
+    return peak
+
+
+def normalize_ir(samples):
+    """Scale IR taps so the cab adds at most 0 dB (prevents the post-IR overload).
+    Returns (samples, applied_db)."""
+    g = peak_response_gain(samples)
+    if g <= 0.0:
+        return samples, 0.0
+    return [s / g for s in samples], 20.0 * math.log10(g)
+
+
 def gather_blobs(src_dir, max_taps):
     """Return a list of (type, name, blob_bytes, samplerate)."""
     entries = []
@@ -144,9 +175,13 @@ def gather_blobs(src_dir, max_taps):
                     f"  ir     {stem:<24} trimming {len(samples)} -> {max_taps} taps"
                 )
                 samples = samples[:max_taps]
+            samples, applied_db = normalize_ir(samples)
             blob = struct.pack("<%df" % len(samples), *samples)
             entries.append((ENTRY_IR, stem, blob, rate))
-            print(f"  ir     {stem:<24} {len(samples):>5} taps @ {rate} Hz")
+            print(
+                f"  ir     {stem:<24} {len(samples):>5} taps @ {rate} Hz"
+                f"  (normalized {applied_db:+.1f} dB -> 0 dB ceiling)"
+            )
 
     return entries
 

@@ -200,6 +200,27 @@ def test_eq_fields():
     print("PASS  eq_fields")
 
 
+def test_ir_normalization():
+    # An IR must convolve at a 0 dB ceiling: a hot, peak-normalized cab tap set
+    # should be scaled DOWN so its worst-case |H(f)| is unity (~no added gain).
+    import importlib.util, os as _os, math
+    tool_path = _os.path.join(_os.path.dirname(__file__), "..", "tools", "build_data_image.py")
+    spec = importlib.util.spec_from_file_location("build_data_image", tool_path)
+    mod  = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    # Two equal-sign taps → DC gain 2.0 (+6 dB), the response peak.
+    hot = [1.0, 1.0]
+    assert abs(mod.peak_response_gain(hot) - 2.0) < 1e-6, "peak_response_gain wrong"
+    norm, applied = mod.normalize_ir(hot)
+    assert abs(applied - 6.0206) < 1e-2, f"applied dB wrong: {applied}"
+    assert abs(mod.peak_response_gain(norm) - 1.0) < 1e-6, "normalized IR not unity-gain"
+    # An already-unity IR (single unit tap) is left untouched.
+    one, applied0 = mod.normalize_ir([1.0])
+    assert abs(applied0) < 1e-9 and abs(one[0] - 1.0) < 1e-9, "unity IR should not change"
+    print("PASS  ir_normalization")
+
+
 if __name__ == "__main__":
     ok = True
     try:
@@ -207,6 +228,7 @@ if __name__ == "__main__":
         test_round_trip()
         test_preset_field_offsets()
         test_eq_fields()
+        test_ir_normalization()
     except AssertionError as e:
         print(f"FAIL  {e}")
         ok = False
