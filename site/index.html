@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="An open-source Neural Amp Modeler guitar pedal built on Daisy Seed.">
+  <title>NAM Platform Pedal</title>
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#content">Skip to content</a>
+  <header class="site-header">
+    <a class="wordmark" href="index.html">NAM <span>// PLATFORM</span></a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>
+    <nav id="site-nav" aria-label="Primary">
+      <a href="index.html" aria-current="page">Features</a>
+      <a href="manual.html">Manual</a>
+      <a href="developers.html">Developers</a>
+      <a href="hardware.html">Hardware</a>
+      <a href="https://github.com/balazsbencs/daisy-nam-pedal">GitHub <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+
+  <main id="content">
+    <section class="hero">
+      <div class="wrap hero-grid">
+        <div class="hero-copy">
+          <div class="eyebrow cyan">Open-source · Daisy Seed · 48 kHz</div>
+          <h1>Your rig.<br>Your firmware.</h1>
+          <p class="lede">A focused Neural Amp Modeler pedal with cabinet IRs, three-band EQ, presets, pre/post effects, and an onboard tuner—built in the open.</p>
+          <div class="hero-actions">
+            <a class="button primary" href="manual.html#simulator">Try the pedal <span aria-hidden="true">→</span></a>
+            <a class="button" href="hardware.html#before-you-start">Build your own <span aria-hidden="true">→</span></a>
+          </div>
+        </div>
+
+        <div class="pedal-preview" aria-label="Pedal control layout: five encoders above a portrait display and two footswitches below">
+          <div class="preview-knobs" aria-hidden="true">
+            <div class="preview-knob">Gain</div><div class="preview-knob">Bass</div><div class="preview-knob">Mid</div><div class="preview-knob">Treble</div><div class="preview-knob">Volume</div>
+          </div>
+          <div class="preview-screen" aria-hidden="true">
+            <div class="screen-head"><span>01/08</span><span class="screen-badge">ACTIVE</span></div>
+            <div class="screen-name">BE100 LEAD</div>
+            <div class="screen-block"><small>AMP</small>BE100</div>
+            <div class="screen-block cab"><small>CAB</small>FRIEDMAN 212</div>
+          </div>
+          <div class="preview-switches" aria-hidden="true">
+            <div class="preview-switch">Prev / Revert</div><div class="preview-switch">Next / Save</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="proof-grid" aria-label="Project facts">
+      <div class="proof"><strong>48 kHz</strong><span>48-sample / 1 ms blocks</span></div>
+      <div class="proof"><strong>5 encoders</strong><span>Immediate live control</span></div>
+      <div class="proof"><strong>6 MiB</strong><span>Models, IRs, and presets</span></div>
+      <div class="proof"><strong>Open</strong><span>Firmware and pin map</span></div>
+    </div>
+
+    <section class="section">
+      <div class="wrap">
+        <div class="section-number">01 · Experience it</div>
+        <h2>Learn by using the controls.</h2>
+        <p class="lede">Turn the five encoders, navigate presets, edit a rig, save or revert changes, and enter tuner mode in a browser simulation of the pedal interface.</p>
+        <div class="feature-panel feature-panel-grid">
+          <div>
+            <div class="eyebrow cyan">Interactive manual</div>
+            <h3>Every gesture, explained in context.</h3>
+            <p class="muted">The help panel follows the current screen, so it only shows actions the device accepts right now.</p>
+          </div>
+          <div class="signal-flow" aria-label="Interface modes">
+            <span>PERFORMANCE</span><i>→</i><span class="cab">BROWSE</span><i>→</i><span class="amp">EDIT</span><span class="fx">TUNER</span>
+          </div>
+        </div>
+        <p><a class="button primary" href="manual.html#simulator">Open the interactive pedal</a></p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <div class="section-number cyan">02 · Two clear paths</div>
+        <h2>Play it. Build it. Understand both.</h2>
+        <div class="path-grid">
+          <a class="path-card" href="manual.html">
+            <div class="eyebrow cyan">For players</div>
+            <h3>Know every move.</h3>
+            <p>Quick start, controls, presets, tuner, editing, status indicators, and practical troubleshooting.</p>
+            <span class="card-link">Open user manual →</span>
+          </a>
+          <a class="path-card builder" href="developers.html">
+            <div class="eyebrow">For builders</div>
+            <h3>Build without guessing.</h3>
+            <p>Pin mapping, real-time architecture, QSPI data, model and IR packaging, flashing, and host tests.</p>
+            <span class="card-link">Open developer guide →</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <div class="section-number">03 · Signal path</div>
+        <h2>A complete mono rig at 48 kHz.</h2>
+        <div class="signal-flow" aria-label="Audio signal path">
+          <span>INPUT</span><i>→</i><span class="amp">GAIN</span><i>→</i><span class="fx">GATE</span><i>→</i><span class="fx">COMP</span><i>→</i><span class="amp">NAM</span><i>→</i><span class="cab">IR</span><i>→</i><span class="fx">EQ</span><i>→</i><span class="fx">DELAY</span><i>→</i><span>OUTPUT</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer"><div class="footer-row"><strong>NAM // PLATFORM</strong><span>Open-source firmware for Daisy Seed · 2026</span></div></footer>
+  <script src="assets/site.js" defer></script>
+</body>
+</html>
