@@ -1,6 +1,7 @@
 #pragma once
 #include <atomic>
 #include <stddef.h>
+#include <stdint.h>
 
 class Eq3
 {
@@ -30,7 +31,12 @@ private:
     BiquadCoeffs staged_[3] = {};
     BiquadCoeffs active_[2][3] = {};
     std::atomic<int> idx_{0};
+    // Bit 0 enables processing; upper bits advance whenever EQ becomes flat.
+    // This lets the audio thread clear history after a rapid flat-to-active
+    // transition while keeping the hot path to one atomic load per block.
+    std::atomic<uint32_t> process_state_{0};
     BiquadState state_[3] = {};
+    uint32_t applied_generation_ = 0; // audio thread only
 
     float gain_db_[3] = {0.0f, 0.0f, 0.0f};
     float freq_[3]    = {100.0f, 750.0f, 4000.0f};

@@ -1,3 +1,16 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index d21f36a..9cfa1ae 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -15,6 +15,8 @@ endforeach()
+ set(_nam_project_version "${_nam_version_MAJOR}.${_nam_version_MINOR}.${_nam_version_PATCH}")
+ project(NAM VERSION "${_nam_project_version}")
+ 
++add_compile_definitions(HOST_BUILD)
++
+ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+ 
+ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 diff --git a/NAM/dsp.cpp b/NAM/dsp.cpp
 index 0aea735..4b2e384 100644
 --- a/NAM/dsp.cpp
@@ -94,10 +107,76 @@ index c9e7941..c446404 100644
 +#endif
  }; // namespace nam
 diff --git a/NAM/wavenet/a2_fast.cpp b/NAM/wavenet/a2_fast.cpp
-index 33af67a..a5e0edf 100644
+index 33af67a..a401280 100644
 --- a/NAM/wavenet/a2_fast.cpp
 +++ b/NAM/wavenet/a2_fast.cpp
-@@ -1010,8 +1010,15 @@ std::unique_ptr<ModelConfig> create_a2_fast_config(const nlohmann::json& config,
+@@ -143,8 +143,10 @@ private:
+   // Working buffers (all Channels rows, max_buffer_size cols, col-major).
+   std::vector<float> _layer_in; // current layer input / next layer input (in-place residual)
+   std::vector<float> _z; // per-layer conv output accumulator (tap-major)
++#if !defined(NAM_SAMPLE_FLOAT)
+   std::vector<float> _cond; // float32 copy of the double NAM_SAMPLE input, reused each block
+   std::vector<float> _head_out; // float32 head output before writing to NAM_SAMPLE
++#endif
+ 
+   int _prewarm_samples = 0;
+ 
+@@ -304,8 +306,10 @@ void A2FastModel<Channels>::SetMaxBufferSize(int maxBufferSize)
+ 
+   _layer_in.assign(static_cast<size_t>(Channels) * maxBufferSize, 0.0f);
+   _z.assign(static_cast<size_t>(Channels) * maxBufferSize, 0.0f);
++#if !defined(NAM_SAMPLE_FLOAT)
+   _cond.assign(static_cast<size_t>(maxBufferSize), 0.0f);
+   _head_out.assign(static_cast<size_t>(maxBufferSize), 0.0f);
++#endif
+ 
+   // Compute per-layer slot sizes, then allocate one contiguous arena.
+   std::array<size_t, kNumLayers> slot_sizes{};
+@@ -758,11 +762,17 @@ void A2FastModel<Channels>::process(NAM_SAMPLE** input, NAM_SAMPLE** output, int
+ 
+   // Rechannel: layer_in[c, f] = _rechannel_w[c] * input[f] for c in Channels.
+   // Also prepare float cond buffer (input copied to float for inner loops).
++#if defined(NAM_SAMPLE_FLOAT)
++  const float* cond = in0;
++#else
+   float* cond = _cond.data();
++#endif
+   for (int f = 0; f < num_frames; f++)
+   {
+     const float x = static_cast<float>(in0[f]);
++#if !defined(NAM_SAMPLE_FLOAT)
+     cond[f] = x;
++#endif
+     float* lin = &_layer_in[static_cast<size_t>(f) * Channels];
+     for (int c = 0; c < Channels; c++)
+       lin[c] = _rechannel_w[c] * x;
+@@ -799,10 +809,14 @@ void A2FastModel<Channels>::process(NAM_SAMPLE** input, NAM_SAMPLE** output, int
+   #endif
+ 
+   // Output.
++#if defined(NAM_SAMPLE_FLOAT)
++  _head_forward(out0, num_frames);
++#else
+   float* head_out = _head_out.data();
+   _head_forward(head_out, num_frames);
+   for (int f = 0; f < num_frames; f++)
+     out0[f] = static_cast<NAM_SAMPLE>(head_out[f]);
++#endif
+ }
+ 
+ // -----------------------------------------------------------------------------
+@@ -816,8 +830,10 @@ struct A2FastConfig : public ModelConfig
+   {
+     if (channels == 3)
+       return std::make_unique<A2FastModel<3>>(std::move(weights), sampleRate);
++  #if !defined(NAM_A2_NANO_ONLY)
+     if (channels == 8)
+       return std::make_unique<A2FastModel<8>>(std::move(weights), sampleRate);
++  #endif
+     throw std::runtime_error("A2FastConfig: unsupported channel count " + std::to_string(channels));
+   }
+ };
+@@ -1010,8 +1026,19 @@ std::unique_ptr<ModelConfig> create_a2_fast_config(const nlohmann::json& config,
    int ch = 0;
    if (!is_a2_shape(config, &ch))
      throw std::runtime_error("create_a2_fast_config: config does not match A2 shape");
@@ -106,7 +185,11 @@ index 33af67a..a5e0edf 100644
 +
 +std::unique_ptr<ModelConfig> create_a2_fast_config(int channels)
 +{
++#if defined(NAM_A2_NANO_ONLY)
++  if (channels != 3)
++#else
 +  if (channels != 3 && channels != 8)
++#endif
 +    throw std::runtime_error("create_a2_fast_config: unsupported channel count " + std::to_string(channels));
    auto out = std::make_unique<A2FastConfig>();
 -  out->channels = ch;
