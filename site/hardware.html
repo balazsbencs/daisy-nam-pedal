@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Verified pin map and assembly boundary for the NAM Platform Pedal.">
+  <meta name="description" content="Verified pin map, wiring rules, and assembly boundary for the NAM Platform Pedal.">
   <title>Hardware Guide · NAM Platform Pedal</title>
   <link rel="stylesheet" href="assets/site.css">
 </head>
@@ -16,11 +16,193 @@
       <a href="index.html">Features</a><a href="manual.html">Manual</a><a href="developers.html">Developers</a><a href="hardware.html" aria-current="page">Hardware</a><a href="https://github.com/balazsbencs/daisy-nam-pedal">GitHub <span aria-hidden="true">↗</span></a>
     </nav>
   </header>
+
   <main id="content">
-    <div class="wrap page-hero"><div class="eyebrow">Hardware reference</div><h1>Wire what is known.</h1><p class="lede">A precise map of every firmware-defined connection, with missing physical-design inputs called out instead of guessed.</p></div>
-    <div class="wrap docs-layout"><aside class="toc"><strong>On this page</strong><a href="#before-you-start">Before you start</a><a href="#pin-map">Pin map</a></aside><article class="doc-content"><section id="before-you-start"><h2>Before you start</h2><p>The verified assembly boundary and full pin map are added in the hardware task.</p></section><section id="pin-map"><h2>Pin map</h2><p>The verified table is added in the hardware task.</p></section></article></div>
+    <div class="wrap page-hero">
+      <div class="eyebrow">Hardware reference</div>
+      <h1>Wire what is known.</h1>
+      <p class="lede">A precise map of every firmware-defined connection, with missing physical-design inputs called out instead of guessed.</p>
+    </div>
+
+    <div class="wrap docs-layout">
+      <aside class="toc">
+        <strong>On this page</strong>
+        <a href="#before-you-start">Before you start</a><a href="#placement">Control placement</a><a href="#pin-map">Pin map</a><a href="#display">Display</a><a href="#encoders">Encoders</a><a href="#footswitches">Footswitches</a><a href="#fixed-resources">Fixed resources</a><a href="#assembly">Assembly order</a><a href="#pre-power">Pre-power checks</a><a href="#bring-up">Bring-up</a><a href="#hardware-troubleshooting">Troubleshooting</a>
+      </aside>
+
+      <article class="doc-content">
+        <section id="before-you-start">
+          <div class="section-number">01 · Boundary</div>
+          <h2>Before you start.</h2>
+          <p>This repository defines the digital user interface around a Daisy Seed: five encoders, two footswitches, an ST7789 display, USB, QSPI data storage, and firmware behavior. Those connections are complete below.</p>
+          <div class="callout danger"><strong>This is not yet a complete pedal hardware package</strong>The repository does not contain a verified analog guitar input/output circuit, power-supply schematic, bill of materials, PCB, enclosure drawing, or mechanical drilling template. You cannot finish a reproducible, stage-ready pedal assembly from this repository alone. Supply those reviewed design inputs before connecting audio jacks or external power.</div>
+          <div class="table-wrap"><table><thead><tr><th>Defined here</th><th>Still required from the physical build</th></tr></thead><tbody>
+            <tr><td>Daisy D-number and STM32 pin assignments</td><td>Analog input protection, biasing, gain, filtering, and jack wiring</td></tr>
+            <tr><td>Passive encoder and footswitch signal wiring</td><td>Analog output buffering, level, protection, and jack wiring</td></tr>
+            <tr><td>ST7789 control-signal wiring and protocol</td><td>Exact display module supply/backlight circuit and connector pin order</td></tr>
+            <tr><td>Firmware/application and data flash workflow</td><td>External supply regulation, polarity protection, grounding topology, BOM</td></tr>
+            <tr><td>Conceptual control arrangement</td><td>PCB/layout, enclosure dimensions, clearances, drill template</td></tr>
+          </tbody></table></div>
+          <p>Use the labels printed on your exact board and compare its orientation with the official <a href="https://daisy.audio/products/daisy-seed">Daisy Seed product documentation</a>. The code uses libDaisy's <code>seed::D0</code>–<code>seed::D30</code> names; physical header numbering is not interchangeable with those names.</p>
+        </section>
+
+        <section id="placement">
+          <div class="section-number">02 · Front panel</div>
+          <h2>Conceptual control placement.</h2>
+          <div class="control-layout" role="img" aria-label="Five encoders across the top, portrait display centered, previous and next footswitches across the bottom">
+            <div class="control-layout-knobs"><div class="layout-control">Gain</div><div class="layout-control">Bass</div><div class="layout-control">Mid</div><div class="layout-control">Treble</div><div class="layout-control">Volume</div></div>
+            <div class="layout-screen">240 × 320<br>PORTRAIT</div>
+            <div class="control-layout-switches"><div class="layout-switch">FS2<br>Prev / Revert</div><div class="layout-switch">FS1<br>Next / Save</div></div>
+          </div>
+          <p class="muted">Conceptual control placement—not a mechanical drawing. Determine component bodies, nut clearances, display window, PCB stack-up, and foot clearance from the actual parts before drilling an enclosure.</p>
+        </section>
+
+        <section id="pin-map">
+          <div class="section-number">03 · Source of truth</div>
+          <h2>Complete firmware pin map.</h2>
+          <p>The table is transcribed from <a href="https://github.com/balazsbencs/daisy-nam-pedal/blob/main/HardwareConfig.h"><code>HardwareConfig.h</code></a>. STM32 port names are verified against the repository's pinned libDaisy <code>daisy_seed.h</code>.</p>
+          <div class="pin-map" role="img" aria-label="Daisy Seed connection groups by D-number">
+            <div class="pin-column"><div class="pin-label"><strong>D0–D2</strong> Gain encoder</div><div class="pin-label"><strong>D7–D10</strong> Bass / Mid</div><div class="pin-label"><strong>D13–D14</strong> Display CS / DC</div><div class="pin-label"><strong>D15–D16</strong> Footswitches</div></div>
+            <div class="seed-chip">DAISY<br>SEED</div>
+            <div class="pin-column"><div class="pin-label"><strong>D18 / D22</strong> Display MOSI / SCK</div><div class="pin-label"><strong>D24 / D26</strong> Display BLK / RST</div><div class="pin-label"><strong>D27–D30</strong> Treble / Volume</div><div class="pin-label"><strong>QSPI / codec / USB</strong> fixed onboard</div></div>
+          </div>
+          <div class="table-wrap"><table><thead><tr><th>Function</th><th>Daisy</th><th>STM32</th><th>Electrical role</th></tr></thead><tbody>
+            <tr><td>FS1 · next / save</td><td>D15</td><td>PC0</td><td>Input, active-low, internal pull-up</td></tr>
+            <tr><td>FS2 · previous / revert</td><td>D16</td><td>PA3</td><td>Input, active-low, internal pull-up</td></tr>
+            <tr><td>Encoder 1 A / B / click</td><td>D0 / D1 / D2</td><td>PB12 / PC11 / PC10</td><td>Inputs with pull-ups; click active-low</td></tr>
+            <tr><td>Encoder 2 A / B</td><td>D7 / D8</td><td>PG10 / PG11</td><td>Phase inputs with pull-ups</td></tr>
+            <tr><td>Encoder 3 A / B</td><td>D9 / D10</td><td>PB4 / PB5</td><td>Phase inputs with pull-ups</td></tr>
+            <tr><td>Encoder 4 A / B</td><td>D27 / D28</td><td>PG9 / PA2</td><td>Phase inputs with pull-ups</td></tr>
+            <tr><td>Encoder 5 A / B</td><td>D29 / D30</td><td>PB14 / PB15</td><td>Phase inputs with pull-ups</td></tr>
+            <tr><td>Display SCK / MOSI</td><td>D22 / D18</td><td>PA5 / PA7</td><td>SPI1 outputs</td></tr>
+            <tr><td>Display CS / DC</td><td>D13 / D14</td><td>PB6 / PB7</td><td>GPIO outputs; CS active-low</td></tr>
+            <tr><td>Display RST / BLK</td><td>D26 / D24</td><td>PD11 / PA1</td><td>GPIO outputs; RST active-low, BLK driven high</td></tr>
+          </tbody></table></div>
+          <div class="callout warning"><strong>One pin, one job</strong>
+            D9 is Encoder 3 A.
+            Encoders 2–5 are intentionally click-less. D26 is display reset. Do not reuse any listed pin for another peripheral.
+          </div>
+        </section>
+
+        <section id="display">
+          <div class="section-number">04 · ST7789</div>
+          <h2>Display signal wiring.</h2>
+          <p>The driver targets a 240×320 ST7789 in portrait orientation. It uses SPI1 master mode 3 (CPOL high, second-edge sampling), transmit-only, 8-bit words, prescaler 4. There is no MISO connection.</p>
+          <div class="table-wrap"><table><thead><tr><th>Module label</th><th>Connect to</th><th>Notes</th></tr></thead><tbody>
+            <tr><td>SCK / CLK</td><td>D22 · PA5</td><td>SPI1 clock; hardware-fixed alternate function.</td></tr>
+            <tr><td>SDA / MOSI / DIN</td><td>D18 · PA7</td><td>Daisy-to-display data; hardware-fixed SPI1 MOSI.</td></tr>
+            <tr><td>CS</td><td>D13 · PB6</td><td>Active-low chip select.</td></tr>
+            <tr><td>DC / A0</td><td>D14 · PB7</td><td>Command/data selection.</td></tr>
+            <tr><td>RES / RST</td><td>D26 · PD11</td><td>Active-low hardware reset.</td></tr>
+            <tr><td>BLK / BL / LED</td><td>D24 · PA1</td><td>Firmware drives high. Connect only to a logic-enable input; do not source backlight LED current from a GPIO.</td></tr>
+            <tr><td>GND</td><td>System ground</td><td>Must share ground with the Daisy.</td></tr>
+            <tr><td>VCC</td><td>Defined by your exact module</td><td>Not specified by this repository. Verify its regulator, logic level, and connector pin order from the module datasheet.</td></tr>
+          </tbody></table></div>
+          <div class="callout danger"><strong>Display boards are not pin-compatible by label alone</strong>Some ST7789 modules include a regulator or backlight transistor; others expose the panel directly. Confirm VCC and BLK requirements before power. A matching controller name does not make the power pins interchangeable.</div>
+        </section>
+
+        <section id="encoders">
+          <div class="section-number">05 · Rotary controls</div>
+          <h2>Wire passive quadrature encoders.</h2>
+          <p>For each encoder, connect its common terminal to system ground and its A/B terminals to the assigned D pins. The firmware enables internal pull-ups; the passive contacts pull each phase low. Do not feed an external voltage into A, B, or click.</p>
+          <ul>
+            <li><strong>Gain / Encoder 1:</strong> A→D0, B→D1, push contact→D2; both the phase common and push-button return go to ground.</li>
+            <li><strong>Bass / Encoder 2:</strong> A→D7, B→D8, common→ground.</li>
+            <li><strong>Mid / Encoder 3:</strong> A→D9, B→D10, common→ground.</li>
+            <li><strong>Treble / Encoder 4:</strong> A→D27, B→D28, common→ground.</li>
+            <li><strong>Volume / Encoder 5:</strong> A→D29, B→D30, common→ground.</li>
+          </ul>
+          <p>If a knob counts backward, power down and exchange only its A and B wires. Leave the common terminal on ground. The primary encoder uses libDaisy debounce in the main loop; encoders 2–5 are sampled from the audio callback and accumulated atomically.</p>
+        </section>
+
+        <section id="footswitches">
+          <div class="section-number">06 · Switches</div>
+          <h2>Wire momentary, normally-open footswitches.</h2>
+          <p>Connect one terminal of FS1 to D15 and one terminal of FS2 to D16. Connect the other terminal of each switch to system ground. Internal pull-ups keep released inputs high; pressing closes the contact to ground.</p>
+          <div class="table-wrap"><table><thead><tr><th>Switch</th><th>Signal</th><th>Return</th><th>Firmware gesture</th></tr></thead><tbody>
+            <tr><td>Right · FS1</td><td>D15 / PC0</td><td>Ground</td><td>Tap next/apply; hold 800 ms save</td></tr>
+            <tr><td>Left · FS2</td><td>D16 / PA3</td><td>Ground</td><td>Tap previous/cancel; hold 800 ms revert</td></tr>
+            <tr><td>Both</td><td>D15 and D16 low</td><td>Ground</td><td>Hold together 800 ms to toggle tuner</td></tr>
+          </tbody></table></div>
+          <p>Use momentary contacts, not latching switches. The chord logic suppresses trailing individual release events after both switches have been held.</p>
+        </section>
+
+        <section id="fixed-resources">
+          <div class="section-number">07 · Onboard</div>
+          <h2>Do not rewire fixed resources.</h2>
+          <div class="table-wrap"><table><thead><tr><th>Resource</th><th>Project use</th><th>Constraint</th></tr></thead><tbody>
+            <tr><td>Audio codec / SAI</td><td>48 kHz, 48-sample blocks, mono input copied to L/R output</td><td>Codec type varies by Daisy Seed board version and is configured by libDaisy. Its physical analog implementation belongs to the chosen Seed/carrier design.</td></tr>
+            <tr><td>IS25LP064A QSPI</td><td>Bootloader, XIP application, 6 MiB data partition</td><td>Dedicated onboard pins; not available for panel wiring.</td></tr>
+            <tr><td>USB FS</td><td>Logging, CDC bootloader command, STM32/DaisyBoot DFU</td><td>Use the Seed USB connection and a data-capable cable.</td></tr>
+            <tr><td>SDRAM</td><td>Framebuffer, delay storage, allocation fallback</td><td>Dedicated onboard pins; initialized by libDaisy.</td></tr>
+          </tbody></table></div>
+        </section>
+
+        <section id="assembly">
+          <div class="section-number">08 · Sequence</div>
+          <h2>Assemble in testable stages.</h2>
+          <ol>
+            <li><strong>Freeze the missing design inputs.</strong> Select/review the analog I/O circuit, power architecture, exact display module, BOM, PCB/perfboard layout, and enclosure drawing.</li>
+            <li><strong>Mark board orientation.</strong> Label D0/D1 ends and ground/power rails before placing the Seed. Photograph the bare placement for later fault tracing.</li>
+            <li><strong>Build power and analog sections separately.</strong> Validate them against their own schematics before attaching the Daisy or guitar equipment.</li>
+            <li><strong>Wire common ground.</strong> Daisy, passive controls, display logic, and the reviewed analog circuit need the intended shared reference. Follow the analog design's grounding topology rather than daisy-chaining high-current returns through switch wiring.</li>
+            <li><strong>Wire and test the display.</strong> Verify its connector pin order with a meter/datasheet; connect only the signals listed above.</li>
+            <li><strong>Wire Encoder 1 and both footswitches.</strong> These provide navigation and mode access. Continuity-test each contact before adding the remaining encoders.</li>
+            <li><strong>Wire Encoders 2–5.</strong> Keep A/B pairs identifiable; do not add unused click wires.</li>
+            <li><strong>Inspect, continuity-test, then power through a current-limited setup</strong> defined by the reviewed power design.</li>
+            <li><strong>Bring up digital functions before audio.</strong> Use USB logs, display, and control checks first; attach the analog path only after those pass.</li>
+          </ol>
+        </section>
+
+        <section id="pre-power">
+          <div class="section-number">09 · Stop before smoke</div>
+          <h2>Pre-power checklist.</h2>
+          <ul>
+            <li>Confirm the exact Daisy Seed revision/orientation and every D-number against board labels.</li>
+            <li>Confirm the power design's input voltage, polarity, regulator output, current limit, and ground with no Daisy installed.</li>
+            <li>Measure no unintended continuity between each power rail and ground.</li>
+            <li>Continuity-test every GPIO wire end-to-end and verify no adjacent-pin shorts.</li>
+            <li>Released footswitches and encoder contacts are open to ground; pressed/closed contacts approach zero ohms to ground.</li>
+            <li>Display VCC and BLK wiring match the exact module datasheet; BLK is not drawing LED current from D24.</li>
+            <li>SCK/MOSI/CS/DC/RST/BLK match D22/D18/D13/D14/D26/D24 in that order.</li>
+            <li>No analog signal, jack contact, or external voltage is connected directly to a Daisy GPIO.</li>
+            <li>Loose wire strands, metal enclosure contact, and unsupported boards cannot short when a footswitch is pressed.</li>
+          </ul>
+          <p>If any check is ambiguous, stop. A firmware pin table cannot resolve an unknown module or power circuit.</p>
+        </section>
+
+        <section id="bring-up">
+          <div class="section-number">10 · First power</div>
+          <h2>Bring up one subsystem at a time.</h2>
+          <ol>
+            <li><strong>Daisy + USB only:</strong> use the approved power arrangement, connect USB, and confirm the board enumerates. Flash the QSPI bootloader/application if needed.</li>
+            <li><strong>Serial log:</strong> confirm <code>NamPlatform booting...</code>, board version, storage status, model/preset counts, controls, display, then audio start.</li>
+            <li><strong>Display:</strong> confirm a portrait performance screen. A lit blank panel points to SPI/control wiring; no backlight points to the module-specific power/BLK path.</li>
+            <li><strong>Controls:</strong> rotate each knob and watch only its field. Tap each switch, then test save/revert holds and the both-switch tuner chord.</li>
+            <li><strong>Data:</strong> flash a verified image at <code>0x90200000</code>; confirm the serial entry count and displayed model/IR names.</li>
+            <li><strong>Audio last:</strong> connect the separately verified analog I/O path to a low-level test setup, start with downstream gain reduced, then confirm bypass before active DSP.</li>
+          </ol>
+        </section>
+
+        <section id="hardware-troubleshooting">
+          <div class="section-number">11 · Fault isolation</div>
+          <h2>Hardware troubleshooting.</h2>
+          <div class="table-wrap"><table><thead><tr><th>Symptom</th><th>Likely defined cause</th><th>Safe check</th></tr></thead><tbody>
+            <tr><td>No USB / no boot log</td><td>Power, cable, boot state, board orientation</td><td>Disconnect peripherals; test Daisy + known data cable with the reviewed supply arrangement.</td></tr>
+            <tr><td>Backlight on, screen blank</td><td>CS/DC/RST/SCK/MOSI swap or incompatible module protocol</td><td>Power off; continuity-test D13/D14/D26/D22/D18 and verify ST7789 mode support.</td></tr>
+            <tr><td>No backlight</td><td>Module-specific VCC/BLK circuit</td><td>Power off; verify the module datasheet and that D24 drives only a logic-enable input.</td></tr>
+            <tr><td>One encoder does nothing</td><td>Wrong D pair, open common, unused click mistaken for a phase</td><td>Power off; continuity-test A/B/common against the pin table.</td></tr>
+            <tr><td>Encoder runs backward</td><td>A/B reversed</td><td>Power off; exchange that encoder's A and B only.</td></tr>
+            <tr><td>Switch always pressed</td><td>Signal shorted to ground or latching switch</td><td>Power off; check open circuit when released and near-zero ohms only while pressed.</td></tr>
+            <tr><td>Tuner changes a preset</td><td>One switch fails to close or chord timing is not reached</td><td>Check both D15 and D16 contacts independently; hold both for at least 800 ms.</td></tr>
+            <tr><td>Digital UI works, audio does not</td><td>Outside the defined digital pin map</td><td>Stop and diagnose the separate analog I/O/power schematic; do not probe by moving signals onto GPIO.</td></tr>
+          </tbody></table></div>
+        </section>
+      </article>
+    </div>
   </main>
-  <footer class="site-footer"><div class="footer-row"><strong>NAM // PLATFORM</strong><span>Hardware reference</span></div></footer>
+
+  <footer class="site-footer"><div class="footer-row"><strong>NAM // PLATFORM</strong><span>Hardware reference · <code>HardwareConfig.h</code> is canonical</span></div></footer>
   <script src="assets/site.js" defer></script>
 </body>
 </html>
