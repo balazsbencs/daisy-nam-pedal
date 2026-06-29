@@ -3,8 +3,7 @@
 
 void AudioEngine::Init(size_t block_size, float sample_rate)
 {
-    block_size_  = block_size;
-    sample_rate_ = sample_rate;
+    (void)block_size;
     eq_.Reset(sample_rate);
     gate_.Init(sample_rate);
     compressor_.Init(sample_rate);
@@ -13,6 +12,13 @@ void AudioEngine::Init(size_t block_size, float sample_rate)
 
 void AudioEngine::Process(const float* in, float* out, size_t frames)
 {
+    if (frames > kMaxBlock)
+    {
+        for (size_t i = 0; i < frames; ++i)
+            out[i] = 0.0f;
+        return;
+    }
+
     if (muted_.load())
     {
         // Preset change in progress — output silence, run no DSP.

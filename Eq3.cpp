@@ -15,6 +15,8 @@ void Eq3::Reset(float sample_rate)
     active_[0][1] = active_[1][1] = staged_[1];
     active_[0][2] = active_[1][2] = staged_[2];
     idx_.store(0, std::memory_order_release);
+    process_state_.store(0, std::memory_order_release);
+    applied_generation_ = 0;
 }
 
 void Eq3::SetBand(Band b, float gain_db, float freq_hz)
@@ -29,6 +31,12 @@ void Eq3::SetBand(Band b, float gain_db, float freq_hz)
     case Band::Treble: staged_[i] = MakeHighShelf(sample_rate_, freq_hz, gain_db); break;
     }
     Publish();
+    const bool enabled = gain_db_[0] != 0.0f || gain_db_[1] != 0.0f || gain_db_[2] != 0.0f;
+    uint32_t state = process_state_.load(std::memory_order_relaxed);
+    uint32_t generation = state & ~1u;
+    if(!enabled && (state & 1u))
+        generation += 2u;
+    process_state_.store(generation | (enabled ? 1u : 0u), std::memory_order_release);
 }
 
 void Eq3::Publish()
@@ -42,6 +50,16 @@ void Eq3::Publish()
 
 void Eq3::Process(float* buf, size_t n)
 {
+    const uint32_t process_state = process_state_.load(std::memory_order_acquire);
+    const uint32_t generation = process_state & ~1u;
+    if(generation != applied_generation_)
+    {
+        for (int b = 0; b < 3; ++b) state_[b] = {0.0f, 0.0f};
+        applied_generation_ = generation;
+    }
+    if(!(process_state & 1u))
+        return;
+
     int i = idx_.load(std::memory_order_acquire);
     const BiquadCoeffs* c = active_[i];
     for (size_t s = 0; s < n; ++s)

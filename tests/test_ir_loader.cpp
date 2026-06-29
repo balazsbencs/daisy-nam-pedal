@@ -53,22 +53,26 @@ static void test_firconvolver_process_no_crash()
     (void)out;
 }
 
-static void test_firconvolver_preserves_tap_511()
+static void test_firconvolver_preserves_last_tap()
 {
+    const size_t tap = FirConvolver::kMaxTaps - 1;
     std::vector<float> ir(FirConvolver::kMaxTaps, 0.0f);
-    ir[511] = 0.25f;
+    ir[tap] = 0.25f;
     FirConvolver conv;
     CHECK(conv.Init(ir.data(), ir.size(), "Full"));
 
-    std::vector<float> input(576, 0.0f);
-    std::vector<float> output(576, 0.0f);
+    const size_t output_sample = FirConvolver::kMaxBlock + tap;
+    const size_t frames = ((output_sample + 1 + FirConvolver::kMaxBlock - 1)
+                           / FirConvolver::kMaxBlock) * FirConvolver::kMaxBlock;
+    std::vector<float> input(frames, 0.0f);
+    std::vector<float> output(frames, 0.0f);
     input[0] = 1.0f;
     for(size_t offset = 0; offset < input.size(); offset += FirConvolver::kMaxBlock)
         conv.Process(input.data() + offset,
                      output.data() + offset,
                      FirConvolver::kMaxBlock);
 
-    CHECK(std::fabs(output[48 + 511] - 0.25f) < 1e-4f);
+    CHECK(std::fabs(output[output_sample] - 0.25f) < 1e-4f);
 }
 
 static void test_firconvolver_process_passthrough_when_not_init()
@@ -121,7 +125,7 @@ int main()
     test_firconvolver_rejects_too_many_taps();
     test_firconvolver_init_succeeds();
     test_firconvolver_process_no_crash();
-    test_firconvolver_preserves_tap_511();
+    test_firconvolver_preserves_last_tap();
     test_firconvolver_process_passthrough_when_not_init();
     test_load_ir_from_qspi_type_check();
     test_load_ir_from_qspi_valid();

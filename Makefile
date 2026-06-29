@@ -78,6 +78,12 @@ C_DEFS = \
   -DARM_TABLE_BITREVIDX_FLT_64 \
   -DARM_TABLE_TWIDDLECOEF_RFFT_F32_128
 
+# Profiling build: make AUDIO_DIAGNOSTICS=1
+AUDIO_DIAGNOSTICS ?= 0
+ifeq ($(AUDIO_DIAGNOSTICS),1)
+C_DEFS += -DNAM_ENABLE_AUDIO_DIAGNOSTICS=1
+endif
+
 C_SOURCES += \
   $(LIBDAISY_DIR)/Drivers/CMSIS-DSP/Source/CommonTables/arm_common_tables.c \
   $(LIBDAISY_DIR)/Drivers/CMSIS-DSP/Source/CommonTables/arm_const_structs.c \

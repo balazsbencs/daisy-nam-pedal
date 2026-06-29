@@ -48,9 +48,24 @@ static void test_delay_is_after_eq()
     CHECK(std::fabs(out[48] - 0.5f) < 1e-5f);
 }
 
+static void test_oversized_block_is_silenced()
+{
+    AudioEngine eng;
+    eng.Init(hw::AUDIO_BLOCK_SIZE, hw::AUDIO_SAMPLE_RATE);
+    eng.SetBypass(false);
+    std::vector<float> in(hw::AUDIO_BLOCK_SIZE + 1, 0.5f);
+    std::vector<float> out(in.size(), 1.0f);
+
+    eng.Process(in.data(), out.data(), out.size());
+
+    for (float sample : out)
+        CHECK(sample == 0.0f);
+}
+
 int main()
 {
     test_eq_is_in_audio_path();
     test_delay_is_after_eq();
+    test_oversized_block_is_silenced();
     return test_summary("test_audio_engine");
 }

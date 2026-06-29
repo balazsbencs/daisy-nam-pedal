@@ -10,6 +10,7 @@
 
 #pragma once
 #include "Eq3.h"
+#include "HardwareConfig.h"
 #include "NAM/dsp.h"
 #include "PedalEffects.h"
 #include <atomic>
@@ -99,11 +100,8 @@ private:
     Compressor compressor_;
     DelayLine delay_;
 
-    size_t block_size_   = 48;
-    float  sample_rate_  = 48000.0f;
-
     // Scratch buffers for mono processing (in default .bss / AXI SRAM).
-    static constexpr size_t kMaxBlock = 48;
+    static constexpr size_t kMaxBlock = hw::AUDIO_BLOCK_SIZE;
     float scratch_in_[kMaxBlock];
     float scratch_out_[kMaxBlock];
 };

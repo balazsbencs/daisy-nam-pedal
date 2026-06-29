@@ -43,13 +43,8 @@ public:
     // Mutable access for in-RAM editing. Changes are session-only (not persisted).
     NamPreset& EditablePreset(uint8_t i) { return presets_[i < count_ ? i : 0]; }
 
-    // QSPI directory entry for preset i (nullptr for synthesised defaults).
-    // Use this pointer with QspiStorage::WritePreset() to persist changes.
-    const NamDataEntry* Entry(uint8_t i) const { return (i < count_) ? entries_[i] : nullptr; }
-
 private:
     NamPreset           presets_[kMaxPresets];
-    const NamDataEntry* entries_[kMaxPresets] = {};
     char                names_[kMaxPresets][NAM_DATA_NAME_LEN] = {};
     uint8_t             count_   = 0;
     uint8_t             current_ = 0;

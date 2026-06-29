@@ -95,15 +95,54 @@ static void test_null_base()
     CHECK(s != QspiStorage::Status::OK);
 }
 
-static void test_blob_flash_offset()
+static NamDataEntry* first_entry(FakeStorage& fs)
 {
-    NamDataEntry e{};
-    e.type   = NAM_ENTRY_PRESET;
-    e.offset = 0x5000;           // 4 KiB-aligned blob offset
-    e.length = sizeof(NamPreset);
-    CHECK_EQ(QspiStorage::BlobFlashOffset(&e), NAM_DATA_PARTITION_OFFSET + 0x5000u);
-    // Blob sits at a sector boundary so the erase only touches its own sector.
-    CHECK_EQ(e.offset % NAM_DATA_SECTOR_SIZE, 0u);
+    return reinterpret_cast<NamDataEntry*>(fs.MutablePtr() + sizeof(NamDataHeader));
+}
+
+static FakeStorage one_entry_partition()
+{
+    FakeStorage fs;
+    const uint8_t blob[] = {1, 2, 3, 4};
+    fs.AddEntry(NAM_ENTRY_MODEL, "Amp", blob, sizeof(blob));
+    fs.Commit();
+    return fs;
+}
+
+static void test_rejects_blob_outside_partition()
+{
+    FakeStorage fs = one_entry_partition();
+    first_entry(fs)->offset = NAM_DATA_PARTITION_SIZE;
+    set_fake(fs);
+    QspiStorage storage;
+    CHECK(storage.Init() == QspiStorage::Status::BAD_MAGIC);
+}
+
+static void test_rejects_blob_overlapping_directory()
+{
+    FakeStorage fs = one_entry_partition();
+    first_entry(fs)->offset = sizeof(NamDataHeader);
+    set_fake(fs);
+    QspiStorage storage;
+    CHECK(storage.Init() == QspiStorage::Status::BAD_MAGIC);
+}
+
+static void test_rejects_invalid_entry_type()
+{
+    FakeStorage fs = one_entry_partition();
+    first_entry(fs)->type = 99;
+    set_fake(fs);
+    QspiStorage storage;
+    CHECK(storage.Init() == QspiStorage::Status::BAD_MAGIC);
+}
+
+static void test_rejects_unterminated_name()
+{
+    FakeStorage fs = one_entry_partition();
+    memset(first_entry(fs)->name, 'X', NAM_DATA_NAME_LEN);
+    set_fake(fs);
+    QspiStorage storage;
+    CHECK(storage.Init() == QspiStorage::Status::BAD_MAGIC);
 }
 
 int main()
@@ -111,6 +150,9 @@ int main()
     test_valid_partition();
     test_bad_magic();
     test_null_base();
-    test_blob_flash_offset();
+    test_rejects_blob_outside_partition();
+    test_rejects_blob_overlapping_directory();
+    test_rejects_invalid_entry_type();
+    test_rejects_unterminated_name();
     return test_summary("qspi_storage");
 }
