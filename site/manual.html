@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Complete operating manual and interactive interface for the NAM Platform Pedal.">
+  <title>User Manual · NAM Platform Pedal</title>
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#content">Skip to content</a>
+  <header class="site-header">
+    <a class="wordmark" href="index.html">NAM <span>// PLATFORM</span></a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>
+    <nav id="site-nav" aria-label="Primary">
+      <a href="index.html">Features</a><a href="manual.html" aria-current="page">Manual</a><a href="developers.html">Developers</a><a href="hardware.html">Hardware</a><a href="https://github.com/balazsbencs/daisy-nam-pedal">GitHub <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+
+  <main id="content">
+    <div class="wrap page-hero">
+      <div class="eyebrow cyan">Player documentation</div>
+      <h1>User manual.</h1>
+      <p class="lede">Learn the physical controls in an interactive replica, then use the concise reference for every operating mode.</p>
+    </div>
+
+    <div class="wrap docs-layout">
+      <aside class="toc">
+        <strong>On this page</strong>
+        <a href="#simulator">Interactive pedal</a><a href="#quick-start">Quick start</a><a href="#signal-flow">Signal flow</a><a href="#controls">Controls</a><a href="#performance">Performance</a><a href="#browse">Browse</a><a href="#edit">Edit</a><a href="#tuner">Tuner</a><a href="#display">Display</a><a href="#troubleshooting">Troubleshooting</a>
+      </aside>
+
+      <article class="doc-content">
+        <section id="simulator">
+          <div class="section-number cyan">Live interface</div>
+          <h2>Try the pedal.</h2>
+          <p>Turn a knob with drag, mouse wheel, or arrow keys. Click the Gain encoder to open presets; press and hold it for 800 ms while browsing to edit. Tap or hold the footswitches exactly as you would on the device.</p>
+          <noscript><div class="callout warning"><strong>Simulator unavailable</strong>The written manual works without JavaScript, but the interactive pedal requires it.</div></noscript>
+
+          <div class="simulator-workbench">
+            <div class="pedal" id="pedal" aria-label="Interactive NAM Platform Pedal" tabindex="0">
+              <div class="pedal-controls">
+                <button class="encoder-control" type="button" data-encoder="0" aria-label="Gain encoder" aria-valuemin="0" aria-valuemax="2" aria-valuenow="1"><span class="knob" aria-hidden="true"></span>Gain<span class="control-value">1.0</span></button>
+                <button class="encoder-control" type="button" data-encoder="1" aria-label="Bass encoder" aria-valuemin="-12" aria-valuemax="12" aria-valuenow="2"><span class="knob" aria-hidden="true"></span>Bass<span class="control-value">+2 dB</span></button>
+                <button class="encoder-control" type="button" data-encoder="2" aria-label="Mid encoder" aria-valuemin="-12" aria-valuemax="12" aria-valuenow="-1"><span class="knob" aria-hidden="true"></span>Mid<span class="control-value">-1 dB</span></button>
+                <button class="encoder-control" type="button" data-encoder="3" aria-label="Treble encoder" aria-valuemin="-12" aria-valuemax="12" aria-valuenow="1"><span class="knob" aria-hidden="true"></span>Treble<span class="control-value">+1 dB</span></button>
+                <button class="encoder-control" type="button" data-encoder="4" aria-label="Volume encoder" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0.8"><span class="knob" aria-hidden="true"></span>Volume<span class="control-value">0.8</span></button>
+              </div>
+              <div class="pedal-screen" id="pedal-screen" role="status" aria-live="polite"></div>
+              <div class="pedal-switches">
+                <button class="footswitch" type="button" data-action="fs2" aria-label="Previous preset or revert footswitch">Prev / Revert</button>
+                <div class="pedal-mark" aria-hidden="true">NAM</div>
+                <button class="footswitch" type="button" data-action="fs1" aria-label="Next preset or save footswitch">Next / Save</button>
+              </div>
+            </div>
+
+            <div class="simulator-side">
+              <div class="mode-panel">
+                <div class="eyebrow">Current mode · <span id="mode-name">Performance</span></div>
+                <h3>What can I do here?</h3>
+                <ul id="mode-help"></ul>
+              </div>
+              <p class="demo-note">Interface demonstration only—no audio is processed. Press <kbd>T</kbd> while focused in the pedal to simulate holding both footswitches.</p>
+              <button class="reset-demo" id="reset-demo" type="button">Reset demo</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="quick-start">
+          <div class="section-number">01 · First sound</div>
+          <h2>Quick start.</h2>
+          <ol>
+            <li>Connect the guitar to the input and your amplifier, powered monitor, or audio interface to the output using the analog I/O circuit in your build.</li>
+            <li>Turn down the downstream system before powering the pedal. Set Gain near <strong>1.0</strong> and Volume low.</li>
+            <li>Power the Daisy-based pedal and wait for the performance screen. The first stored preset loads automatically.</li>
+            <li>Bring up downstream volume slowly, then use the five encoders for the live level and EQ balance.</li>
+            <li>Tap the right footswitch for the next preset or the left footswitch for the previous preset.</li>
+          </ol>
+          <div class="callout warning"><strong>Hardware boundary</strong>The firmware repository defines digital controls and display wiring, but not a complete analog I/O or power circuit. Follow the circuit used by your build; do not connect instrument or amplifier signals directly to GPIO. See the <a href="hardware.html#before-you-start">hardware guide</a>.</div>
+        </section>
+
+        <section id="signal-flow">
+          <div class="section-number">02 · Audio path</div>
+          <h2>Signal flow.</h2>
+          <div class="signal-flow" aria-label="Input passes through input gain, gate, compressor, NAM, impulse response, equalizer, delay, and output volume">
+            <span>INPUT</span><i>→</i><span class="amp">GAIN</span><i>→</i><span class="fx">GATE</span><i>→</i><span class="fx">COMP</span><i>→</i><span class="amp">NAM</span><i>→</i><span class="cab">IR</span><i>→</i><span class="fx">EQ</span><i>→</i><span class="fx">DELAY</span><i>→</i><span>VOLUME</span>
+          </div>
+          <p>The normal path is mono at 48 kHz and is copied to both outputs. Bypass sends the dry input directly to both outputs. Tuner mode analyzes the dry input and mutes both outputs. Gate, compressor, and delay values are stored in presets; the current device UI does not expose their parameters for live editing.</p>
+        </section>
+
+        <section id="controls">
+          <div class="section-number">03 · Physical controls</div>
+          <h2>Control reference.</h2>
+          <div class="table-wrap"><table><thead><tr><th>Control</th><th>Performance mode</th><th>Other modes</th></tr></thead><tbody>
+            <tr><td>Gain encoder</td><td>Turn: input gain, 0.0–2.0 in 0.1 steps. Click: browse presets.</td><td>Browse: turn cursor, click selects, hold 800 ms opens edit. Edit: turn moves/changes fields; click toggles navigation/value editing.</td></tr>
+            <tr><td>Bass encoder</td><td>±12 dB in 1 dB steps.</td><td>Ignored while browsing, editing, or tuning.</td></tr>
+            <tr><td>Mid encoder</td><td>±12 dB in 1 dB steps.</td><td>Ignored while browsing, editing, or tuning.</td></tr>
+            <tr><td>Treble encoder</td><td>±12 dB in 1 dB steps.</td><td>Ignored while browsing, editing, or tuning.</td></tr>
+            <tr><td>Volume encoder</td><td>Output level, 0.0–1.0 in 0.1 steps.</td><td>Ignored while browsing, editing, or tuning.</td></tr>
+            <tr><td>Right / FS1</td><td>Tap: next preset. Hold 800 ms: save live Gain, EQ, Volume, and bypass values.</td><td>Browse: cancel. Edit: apply and save.</td></tr>
+            <tr><td>Left / FS2</td><td>Tap: previous preset. Hold 800 ms: revert live changes.</td><td>Browse or edit: cancel.</td></tr>
+            <tr><td>Both footswitches</td><td>Hold together 800 ms: tuner.</td><td>In tuner, hold together again to return.</td></tr>
+          </tbody></table></div>
+        </section>
+
+        <section id="performance">
+          <div class="section-number">04 · Performance</div>
+          <h2>Play and make live changes.</h2>
+          <p>The main screen shows the preset, amp model, cabinet IR, active/bypass state, and five live values. Turning any encoder marks the preset <strong>EDITED</strong>. These changes affect sound immediately but remain temporary until saved.</p>
+          <ul><li><strong>Save:</strong> hold right / FS1 for 800 ms. The edited marker clears after QSPI programming completes.</li><li><strong>Revert:</strong> hold left / FS2 for 800 ms. The stored preset is reapplied and the edited marker clears.</li><li><strong>Change preset:</strong> tap either footswitch. Unsaved live changes are discarded when another preset loads.</li></ul>
+        </section>
+
+        <section id="browse">
+          <div class="section-number">05 · Browse</div>
+          <h2>Select a preset directly.</h2>
+          <ol><li>Click the Gain encoder from performance mode.</li><li>Turn it to move the bounded cursor through the preset list.</li><li>Click it to load the highlighted preset, or tap either footswitch to leave without changing presets.</li><li>To edit the highlighted preset instead, hold the Gain encoder for 800 ms.</li></ol>
+        </section>
+
+        <section id="edit">
+          <div class="section-number">06 · Edit</div>
+          <h2>Change the stored rig.</h2>
+          <p>The editor exposes eight fields: Model, Cab, Input Gain, Output Volume, Bypass, Bass Frequency, Mid Frequency, and Treble Frequency.</p>
+          <ol><li>Turn the Gain encoder to highlight a field.</li><li>Click it to enter value-edit mode. The highlight changes color.</li><li>Turn to change the value; click again to return to field navigation.</li><li>Tap right / FS1 to apply the edited preset and save it to its QSPI slot.</li><li>Tap left / FS2 to discard the working copy and return to performance mode.</li></ol>
+          <p>EQ gain values edited in performance mode are preserved when the editor saves. A synthesized preset created because no preset records exist has no QSPI slot, so it cannot be persisted from the device.</p>
+        </section>
+
+        <section id="tuner">
+          <div class="section-number">07 · Tuner</div>
+          <h2>Tune silently.</h2>
+          <p>Hold both footswitches together for 800 ms from performance mode. The pedal analyzes the dry input, skips the amp/effects path, and mutes both outputs. The screen shows note, octave, and cents offset when a stable signal is detected. Hold both switches again to return.</p>
+          <p>Individual footswitch taps are suppressed during the chord, so entering or leaving tuner mode does not also change presets.</p>
+        </section>
+
+        <section id="display">
+          <div class="section-number">08 · Display</div>
+          <h2>Read the status at a glance.</h2>
+          <ul><li><strong>ACTIVE / BYPASS:</strong> whether DSP or clean passthrough is selected by the preset.</li><li><strong>EDITED:</strong> live values differ from the stored preset.</li><li><strong>AMP / CAB:</strong> resolved model and IR names; <strong>Off</strong> means no IR.</li><li><strong>Five meters:</strong> Gain, Bass, Mid, Treble, and Volume settings—not audio level meters.</li><li><strong>AUDIO OVERLOAD:</strong> the audio callback approached its 1 ms deadline; choose a supported/lighter data set before relying on the rig live.</li></ul>
+        </section>
+
+        <section id="troubleshooting">
+          <div class="section-number">09 · Recovery</div>
+          <h2>Troubleshooting.</h2>
+          <div class="table-wrap"><table><thead><tr><th>Symptom</th><th>Check</th><th>Action</th></tr></thead><tbody>
+            <tr><td>No output</td><td>Tuner active, Volume at 0, downstream muted, or analog path incomplete.</td><td>Exit tuner, raise Volume carefully, test downstream gear, then verify the build's analog circuit.</td></tr>
+            <tr><td>Dry sound only</td><td>BYPASS badge or unsupported/missing model.</td><td>Load an active preset. Rebuild the data image with a supported A2 Nano model if model loading failed.</td></tr>
+            <tr><td>No cabinet effect</td><td>CAB shows Off or IR failed to load.</td><td>Select a preset with an IR and verify the data image contains that exact IR name.</td></tr>
+            <tr><td>Edits disappear</td><td>Preset changed before saving, or preset is synthesized without a flash entry.</td><td>Hold FS1 to save before changing presets; add named preset entries to the data image for persistence.</td></tr>
+            <tr><td>Encoder ignored</td><td>Only Gain is active outside performance mode.</td><td>Return to performance mode for Bass, Mid, Treble, and Volume changes.</td></tr>
+            <tr><td>Display is blank</td><td>Display power or SCK/MOSI/CS/DC/RST/BLK wiring.</td><td>Power off, then use the verified <a href="hardware.html#pin-map">pin map</a> and pre-power checks.</td></tr>
+          </tbody></table></div>
+        </section>
+      </article>
+    </div>
+  </main>
+
+  <footer class="site-footer"><div class="footer-row"><strong>NAM // PLATFORM</strong><span>User manual · firmware behavior at commit time</span></div></footer>
+  <script src="assets/site.js" defer></script>
+  <script type="module" src="assets/simulator.js"></script>
+</body>
+</html>

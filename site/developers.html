@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Developer guide for building, flashing, and extending the NAM Platform Pedal firmware.">
+  <title>Developer Guide · NAM Platform Pedal</title>
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#content">Skip to content</a>
+  <header class="site-header">
+    <a class="wordmark" href="index.html">NAM <span>// PLATFORM</span></a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>
+    <nav id="site-nav" aria-label="Primary">
+      <a href="index.html">Features</a><a href="manual.html">Manual</a><a href="developers.html" aria-current="page">Developers</a><a href="hardware.html">Hardware</a><a href="https://github.com/balazsbencs/daisy-nam-pedal">GitHub <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+
+  <main id="content">
+    <div class="wrap page-hero">
+      <div class="eyebrow">Engineering documentation</div>
+      <h1>Developer guide.</h1>
+      <p class="lede">Build the firmware, understand its real-time boundaries, package models and IRs, and flash the two QSPI regions.</p>
+    </div>
+
+    <div class="wrap docs-layout">
+      <aside class="toc">
+        <strong>On this page</strong>
+        <a href="#quick-build">Quick build</a><a href="#repository">Repository map</a><a href="#architecture">Architecture</a><a href="#audio">Audio path</a><a href="#ui">Controls and UI</a><a href="#qspi">QSPI layout</a><a href="#data-image">Data image</a><a href="#flashing">Flashing</a><a href="#bootloader">USB bootloader</a><a href="#tests">Tests and CI</a><a href="#submodules">Submodules</a><a href="#contributing">Contributing</a>
+      </aside>
+
+      <article class="doc-content">
+        <section id="quick-build">
+          <div class="section-number">01 · Build</div>
+          <h2>Build from a clean clone.</h2>
+          <p>The CI reference environment is Ubuntu with Arm GNU Toolchain <strong>15.2.Rel1</strong>. Local builds need an <code>arm-none-eabi-gcc</code> toolchain, GNU Make, Git, Python 3, and <code>dfu-util</code> for flashing.</p>
+          <pre><code>git clone --recurse-submodules https://github.com/balazsbencs/daisy-nam-pedal.git
+cd daisy-nam-pedal
+tools/apply_submodule_patches.sh
+make -C third_party/libDaisy
+make -C third_party/DaisySP
+make</code></pre>
+          <p>Build products are written to <code>build/NamPlatform.elf</code>, <code>.hex</code>, and <code>.bin</code>. The application is roughly 600 KiB and cannot fit in the STM32H750's 128 KiB internal flash.</p>
+          <div class="callout warning"><strong>BOOT_QSPI is mandatory</strong><code>APP_TYPE = BOOT_QSPI</code> in the root Makefile makes the application execute from external QSPI. Do not switch this project to <code>BOOT_SRAM</code> or an internal-flash target.</div>
+        </section>
+
+        <section id="repository">
+          <div class="section-number">02 · Code map</div>
+          <h2>Know where behavior lives.</h2>
+          <div class="table-wrap"><table><thead><tr><th>Area</th><th>Canonical files</th><th>Responsibility</th></tr></thead><tbody>
+            <tr><td>Boot and orchestration</td><td><code>main.cpp</code></td><td>Hardware startup, audio callback, control dispatch, UI modes, diagnostics.</td></tr>
+            <tr><td>Audio</td><td><code>AudioEngine.*</code>, <code>PedalEffects.*</code>, <code>Eq3.*</code></td><td>Real-time chain and thread-safe parameter/model swaps.</td></tr>
+            <tr><td>NAM and IR</td><td><code>ModelManager.*</code>, <code>IRLoader.*</code>, <code>PartitionedConvolver.*</code></td><td>Load model/IR blobs and execute amp/cab processing.</td></tr>
+            <tr><td>Controls and UI</td><td><code>Controls.*</code>, <code>QuadEncoder.*</code>, <code>Ui.*</code>, <code>display/</code></td><td>Debounce, gestures, state display, ST7789 transfer.</td></tr>
+            <tr><td>Storage</td><td><code>data_format.h</code>, <code>QspiStorage.*</code>, <code>PresetManager.*</code></td><td>On-flash ABI, directory reads, preset application and writes.</td></tr>
+            <tr><td>Desktop tools</td><td><code>tools/</code></td><td>Patch submodules, build/inspect data images, flash app/data.</td></tr>
+            <tr><td>Configuration</td><td><code>HardwareConfig.h</code>, <code>Makefile</code></td><td>Pins, sample/block settings, source list, compile-time feature flags.</td></tr>
+          </tbody></table></div>
+        </section>
+
+        <section id="architecture">
+          <div class="section-number">03 · Runtime boundaries</div>
+          <h2>Keep work out of the audio IRQ.</h2>
+          <div class="feature-panel-grid" aria-label="Audio interrupt and main loop responsibilities">
+            <div class="path-card"><div class="eyebrow cyan">Audio callback · every 1 ms</div><h3>Deterministic DSP only</h3><p>Read input, sample click-less encoders, process tuner or audio chain, copy mono output to L/R, record peak cycle count.</p></div>
+            <div class="path-card builder"><div class="eyebrow">Main loop</div><h3>Control and allocation</h3><p>Debounce gestures, load/free models and IRs, write presets with audio stopped, render display frames, print diagnostics.</p></div>
+          </div>
+          <p>The callback receives 48 samples at 48 kHz: exactly a 1 ms deadline. Model objects and IR convolvers are constructed in the main loop, then atomically exposed to the callback. Never allocate, erase flash, print, or block in the callback.</p>
+          <p>Model reload deliberately swaps the active model to null before allocating the replacement. This creates a brief dry path but frees the fast-SRAM arena; retaining both models would spill the new arena into SDRAM and miss the audio deadline.</p>
+        </section>
+
+        <section id="audio">
+          <div class="section-number">04 · DSP</div>
+          <h2>Audio path and supported models.</h2>
+          <div class="signal-flow" aria-label="Audio callback processing order">
+            <span>INPUT</span><i>→</i><span class="amp">GAIN</span><i>→</i><span class="fx">GATE</span><i>→</i><span class="fx">COMP</span><i>→</i><span class="amp">NAM</span><i>→</i><span class="cab">IR</span><i>→</i><span class="fx">EQ</span><i>→</i><span class="fx">DELAY</span><i>→</i><span>VOLUME</span>
+          </div>
+          <p>The current build enables real-time effects and the optimized A2 path. It defines <code>NAM_ENABLE_A2_FAST</code>, <code>NAM_A2_NANO_ONLY</code>, and disables slimmable WaveNet. Treat the firmware as supporting the embedded A2 Nano path—not arbitrary desktop <code>.nam</code> architectures. The data packer accepts binary <code>.namb</code> blobs.</p>
+          <p>Bypass is an early dry copy. Tuner mode is another early path: it pushes dry input into <code>TunerDetector</code>, mutes both outputs, and skips all amp/effect processing.</p>
+        </section>
+
+        <section id="ui">
+          <div class="section-number">05 · Main-loop state</div>
+          <h2>Controls and UI flow.</h2>
+          <div class="signal-flow" aria-label="User interface state transitions"><span>PERFORMANCE</span><i>click Gain →</i><span class="cab">BROWSE</span><i>hold Gain →</i><span class="amp">EDIT</span><span class="fx">TUNER<br><small>both switches</small></span></div>
+          <ul>
+            <li><code>Controls::Process()</code> emits high-level taps, holds, encoder steps, and the both-switch chord.</li>
+            <li>Encoders 2–5 are sampled at the 1 kHz audio-block rate so display transfers cannot drop detents.</li>
+            <li><code>Ui</code> renders into a framebuffer and transfers up to 16 display rows per main-loop call, capped at 30 fps.</li>
+            <li>Only one of browse, edit, or tuner is active; performance is the default when all are false.</li>
+          </ul>
+        </section>
+
+        <section id="qspi">
+          <div class="section-number">06 · Flash ABI</div>
+          <h2>QSPI memory layout.</h2>
+          <div class="table-wrap"><table><thead><tr><th>Range</th><th>Size</th><th>Use</th></tr></thead><tbody>
+            <tr><td><code>0x90000000–0x9003FFFF</code></td><td>256 KiB</td><td>Daisy QSPI bootloader.</td></tr>
+            <tr><td><code>0x90040000–0x901FFFFF</code></td><td>1.75 MiB reserved</td><td>Execute-in-place application region.</td></tr>
+            <tr><td><code>0x90200000–0x907FFFFF</code></td><td>6 MiB</td><td>Model, IR, and preset data partition.</td></tr>
+          </tbody></table></div>
+          <p><code>data_format.h</code> is the firmware ABI: an 8-byte <code>NamDataHeader</code>, 48-byte directory entries, then 4 KiB-aligned blobs. Models contain raw NAMB bytes; IRs contain little-endian mono float32 taps; presets are packed 138-byte <code>NamPreset</code> records that reference model and IR names.</p>
+          <p>The running firmware reads data memory-mapped. A preset save stops audio, disables interrupts, erases its aligned 4 KiB sector, writes the record, restores interrupts, then restarts audio. Model/IR data replacement still uses DFU.</p>
+        </section>
+
+        <section id="data-image">
+          <div class="section-number">07 · Assets</div>
+          <h2>Build and inspect a data image.</h2>
+          <p>From the repository root, create a folder containing binary models, WAV impulse responses, and an optional <code>presets.json</code>:</p>
+          <pre><code>mydata/
+├── be100.namb
+├── friedman_212.wav
+└── presets.json</code></pre>
+          <pre><code>[
+  {
+    "name": "BE100 Lead",
+    "model": "be100",
+    "ir": "friedman_212",
+    "input_gain": 1.0,
+    "output_volume": 0.8,
+    "bypass": false,
+    "eq": {"bass_gain": 2, "mid_gain": -1, "treble_gain": 1,
+           "bass_freq": 100, "mid_freq": 750, "treble_freq": 4000}
+  }
+]</code></pre>
+          <pre><code>python3 tools/build_data_image.py mydata -o data_image.bin
+python3 tools/inspect_data_image.py data_image.bin</code></pre>
+          <p>The packer needs only Python's standard library. It downmixes supported PCM/float WAV files to mono, trims to 256 taps by default to match the convolver, peak-normalizes the frequency response to a 0 dB ceiling, and rejects an image larger than 6 MiB. Use <code>--max-taps 0</code> only after changing and validating the firmware convolver limit.</p>
+          <div class="callout"><strong>Name matching is exact</strong>Preset <code>model</code> and <code>ir</code> values must match file stems after the packer truncates names to 30 ASCII characters. An empty IR name means cab bypass.</div>
+        </section>
+
+        <section id="flashing">
+          <div class="section-number">08 · DFU</div>
+          <h2>Flash bootloader, app, and data.</h2>
+          <p>Enter STM32 DFU by holding BOOT, tapping RESET, then releasing BOOT. Install the QSPI bootloader once:</p>
+          <pre><code>tools/flash_app.sh --boot</code></pre>
+          <p>The board reboots. Enter DFU again, then build and flash the application at <code>0x90040000</code>:</p>
+          <pre><code>tools/flash_app.sh</code></pre>
+          <p>Build the data image, enter the DaisyBoot DFU window as prompted, then write the data partition at <code>0x90200000</code>:</p>
+          <pre><code>tools/flash_data.sh data_image.bin</code></pre>
+          <div class="callout danger"><strong>Do not swap the addresses</strong>Application and data are separate QSPI regions. Writing a data image at the app address destroys firmware; writing firmware at the data address destroys models, IRs, and presets.</div>
+        </section>
+
+        <section id="bootloader">
+          <div class="section-number">09 · USB CDC</div>
+          <h2>App-triggered bootloader entry.</h2>
+          <p>The firmware listens on internal USB CDC for one exact newline-terminated command:</p>
+          <pre><code>NAM_DFU_BOOT 7E57A11E</code></pre>
+          <p><code>BootloaderCommandParser</code> accepts fragmented USB packets, resets overlong lines, ignores non-matching text, and calls the Daisy system reset-to-bootloader path only on an exact line match. A host tool may send this command instead of requiring physical BOOT/RESET access; the USB serial device name is host-specific.</p>
+        </section>
+
+        <section id="tests">
+          <div class="section-number">10 · Verification</div>
+          <h2>Tests, CI, and releases.</h2>
+          <ul>
+            <li><strong>Firmware PR CI:</strong> recursively checks out submodules, applies maintained patches, caches libDaisy/DaisySP, builds with Arm GNU 15.2.Rel1, and prints ELF memory use.</li>
+            <li><strong>Release workflow:</strong> derives semantic versions from conventional commits, builds firmware, and packages versioned BIN/ELF artifacts.</li>
+            <li><strong>Website CI:</strong> checks static links/structure and simulator transitions before deploying GitHub Pages.</li>
+          </ul>
+          <div class="callout warning"><strong>Known baseline issue</strong>At this revision, <code>tests/Makefile</code> contains committed merge-conflict markers and the aggregate host suite stops with “missing separator.” Resolve that file before using <code>make -C tests run</code>; this website change intentionally does not alter unrelated firmware test infrastructure.</div>
+          <p>Individual test sources remain useful references for QSPI, presets, DSP, controls, UI mode, display transfer, and tuner behavior.</p>
+        </section>
+
+        <section id="submodules">
+          <div class="section-number">11 · Maintained patches</div>
+          <h2>Keep upstream pins clean.</h2>
+          <p><code>NeuralAmpModelerCore</code>, <code>nam-binary-loader</code>, libDaisy, and DaisySP are pinned submodules. Repository-owned embedded changes live as patch files under <code>patches/submodules/</code>, not as undocumented dirty submodule commits.</p>
+          <pre><code>git submodule update --init --recursive
+tools/apply_submodule_patches.sh</code></pre>
+          <p>The patch script is idempotent. Before updating a submodule pin, read <a href="https://github.com/balazsbencs/daisy-nam-pedal/blob/main/docs/SUBMODULE_CHANGES.md">Maintained Submodule Changes</a> for each patch's rationale, validation, and retirement condition.</p>
+        </section>
+
+        <section id="contributing">
+          <div class="section-number">12 · Change safely</div>
+          <h2>Contribution checklist.</h2>
+          <ol>
+            <li>Start from a clean clone with recursive submodules and applied patches.</li>
+            <li>Keep <code>HardwareConfig.h</code>, <code>data_format.h</code>, and the desktop packer in sync when changing pins or storage ABI.</li>
+            <li>Keep allocation and blocking work out of <code>AudioCallback</code>.</li>
+            <li>Add the smallest host check that fails before and passes after non-trivial logic changes.</li>
+            <li>Build firmware and inspect <code>arm-none-eabi-size build/NamPlatform.elf</code>.</li>
+            <li>Use conventional commit prefixes so release automation can classify the change.</li>
+          </ol>
+        </section>
+      </article>
+    </div>
+  </main>
+
+  <footer class="site-footer"><div class="footer-row"><strong>NAM // PLATFORM</strong><span>Developer guide · source-backed reference</span></div></footer>
+  <script src="assets/site.js" defer></script>
+</body>
+</html>

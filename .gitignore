@@ -4,5 +4,6 @@
 .idea
 data_image.bin
 .superpowers/
+.worktrees/
 __pycache__/
 *.pyc
