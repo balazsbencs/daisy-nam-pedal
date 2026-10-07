@@ -83,10 +83,9 @@ test_display_transfer: test_display_transfer.cpp
 test_ui_mode: test_ui_mode.cpp ../ui_mode.h
 	$(CXX) $(CXXFLAGS) $< -o $@
 
-<<<<<<< HEAD
 test_bootloader_command: test_bootloader_command.cpp ../BootloaderCommand.cpp ../BootloaderCommand.h
 	$(CXX) $(CXXFLAGS) test_bootloader_command.cpp ../BootloaderCommand.cpp -o $@
-=======
+
 # Monophonic tuner pitch detection
 test_tuner_detector: test_tuner_detector.cpp ../TunerDetector.cpp ../TunerDetector.h
 	$(CXX) $(CXXFLAGS) test_tuner_detector.cpp ../TunerDetector.cpp -o $@
@@ -94,7 +93,6 @@ test_tuner_detector: test_tuner_detector.cpp ../TunerDetector.cpp ../TunerDetect
 # Pure both-footswitch chord state machine (no Daisy deps)
 test_controls_footswitch_chord: test_controls_footswitch_chord.cpp ../footswitch_chord.h
 	$(CXX) $(CXXFLAGS) $< -o $@
->>>>>>> 69aa08c (feat: add footswitch tuner mode)
 
 run: all
 	@echo "=== TEST-01: data_format ==="
@@ -125,15 +123,12 @@ run: all
 	./test_display_transfer
 	@echo "=== test_ui_mode ==="
 	./test_ui_mode
-<<<<<<< HEAD
 	@echo "=== test_bootloader_command ==="
 	./test_bootloader_command
-=======
 	@echo "=== test_tuner_detector ==="
 	./test_tuner_detector
 	@echo "=== test_controls_footswitch_chord ==="
 	./test_controls_footswitch_chord
->>>>>>> 69aa08c (feat: add footswitch tuner mode)
 	@echo "=== TEST-11: tools (Python) ==="
 	python3 test_tools.py
 

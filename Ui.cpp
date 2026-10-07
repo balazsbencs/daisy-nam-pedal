@@ -212,7 +212,7 @@ void Ui::RenderPerformance()
     if (perf_.overload)
         DR::DrawText(kMargin, kRowHint, "! AUDIO OVERLOAD", kColorRed, kColorBlack, Font_7x10);
     else
-        DR::DrawText(kMargin, kRowHint, "FS1:next/SAVE  FS2:prev/RVRT",
+        DR::DrawText(kMargin, kRowHint, "FS1:next  FS2:prev  SAVE:DFU",
                      kColorDim, kColorBlack, Font_7x10);
 }
 
@@ -375,7 +375,7 @@ void Ui::RenderEdit()
     // Footer
     static constexpr uint16_t kEditHintY = 298;
     DisplayRenderer::DrawText(kMargin, kEditHintY,
-                              "FS1:save  FS2:revert",
+                              "FS1:apply RAM  FS2:cancel",
                               kColorDim, kColorBlack, Font_7x10);
 }
 

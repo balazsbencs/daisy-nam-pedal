@@ -3,7 +3,7 @@
 // Signal chain:  in[L] → input_gain → NAM model → IR (FIR) → EQ → output_vol → out L+R
 // Storage:       onboard QSPI flash (no SD card), data partition @ 0x90200000
 // Controls:      ENC1=Gain  ENC2=Bass  ENC3=Mid  ENC4=Treble  ENC5=Vol
-//                FS1 tap=next preset  FS1 hold=save
+//                FS1 tap=next preset  FS1 hold=desktop/DFU save reminder
 //                FS2 tap=prev preset  FS2 hold=revert
 
 #include "daisy_seed.h"
@@ -25,6 +25,10 @@
 #include <cstring>
 
 using namespace daisy;
+
+#ifndef NAM_ENABLE_AUDIO_DIAGNOSTICS
+#define NAM_ENABLE_AUDIO_DIAGNOSTICS 0
+#endif
 
 // ---------------------------------------------------------------------------
 // Global module instances
@@ -55,6 +59,7 @@ static uint8_t browse_cursor = 0;
 static bool    preset_dirty  = false; // unsaved live-edit changes
 
 // CPU diagnostics
+#if NAM_ENABLE_AUDIO_DIAGNOSTICS
 static volatile uint32_t cb_count   = 0;
 static volatile uint32_t cb_max_cyc = 0;
 
@@ -65,6 +70,7 @@ extern "C" volatile uint32_t g_sdram_heap_used;
 static volatile float    diag_input_peak = 0.0f;
 static volatile float    diag_output_peak = 0.0f;
 static volatile float    diag_diff_peak = 0.0f;
+#endif
 
 // Audio diagnostics:
 // 0 = full pedal DSP, 1 = input passthrough, 2 = generated beep pattern,
@@ -82,8 +88,9 @@ static void UsbReceiveCallback(uint8_t* buffer, uint32_t* length)
         System::ResetToBootloader(System::BootloaderMode::DAISY_INFINITE_TIMEOUT);
 }
 
-static constexpr uint32_t kCbBudgetCyc   = 480000;
-static constexpr uint32_t kCbOverloadCyc = (kCbBudgetCyc * 9) / 10;
+#if NAM_ENABLE_AUDIO_DIAGNOSTICS
+static constexpr uint32_t kCbOverloadCyc = (480000u * 9) / 10;
+#endif
 static bool audio_overload = false;
 
 // ---------------------------------------------------------------------------
@@ -122,8 +129,10 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
                           AudioHandle::OutputBuffer out,
                           size_t                    frames)
 {
+#if NAM_ENABLE_AUDIO_DIAGNOSTICS
     cb_count++;
     uint32_t t0 = DWT->CYCCNT;
+#endif
     static float tone_phase = 0.0f;
     static uint32_t diag_frame = 0;
 
@@ -136,9 +145,11 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     for (size_t i = 0; i < frames; ++i)
     {
         mono_in[i] = in[0][i];
+#if NAM_ENABLE_AUDIO_DIAGNOSTICS
         float magnitude = mono_in[i] < 0.0f ? -mono_in[i] : mono_in[i];
         if(magnitude > diag_input_peak)
             diag_input_peak = magnitude;
+#endif
     }
 
     // Tuner mode: feed the detector the dry input and mute the outputs. Skip
@@ -148,8 +159,10 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
         tuner_detector.PushAudioBlock(mono_in, frames);
         for (size_t i = 0; i < frames; ++i)
             out[0][i] = out[1][i] = 0.0f;
+#if NAM_ENABLE_AUDIO_DIAGNOSTICS
         uint32_t cyc = DWT->CYCCNT - t0;
         if (cyc > cb_max_cyc) cb_max_cyc = cyc;
+#endif
         return;
     }
 
@@ -198,6 +211,7 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
 
     for (size_t i = 0; i < frames; ++i)
     {
+#if NAM_ENABLE_AUDIO_DIAGNOSTICS
         float output_magnitude = mono_out[i] < 0.0f ? -mono_out[i] : mono_out[i];
         float diff = mono_out[i] - mono_in[i];
         float diff_magnitude = diff < 0.0f ? -diff : diff;
@@ -205,11 +219,14 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
             diag_output_peak = output_magnitude;
         if(diff_magnitude > diag_diff_peak)
             diag_diff_peak = diff_magnitude;
+#endif
         out[0][i] = out[1][i] = mono_out[i];
     }
 
+#if NAM_ENABLE_AUDIO_DIAGNOSTICS
     uint32_t cyc = DWT->CYCCNT - t0;
     if (cyc > cb_max_cyc) cb_max_cyc = cyc;
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -357,28 +374,6 @@ static void PushEditScreen(uint8_t preset_idx)
         ui.ShowEdit(edit_state);
 }
 
-// Write active preset to QSPI flash (XIP-safe: stops audio around erase/program).
-static void SaveActivePreset()
-{
-    uint8_t              cur   = presets.Current();
-    const NamDataEntry*  entry = presets.Entry(cur);
-    if (!entry) return; // synthesised preset — no flash slot
-
-    NamPreset& p     = presets.EditablePreset(cur);
-    p.input_gain     = audio_engine.GetInputGain();
-    p.output_volume  = audio_engine.GetOutputVol();
-    p.bypass         = audio_engine.GetBypass() ? 1u : 0u;
-    p.eq_bass_gain   = audio_engine.GetEqGain(Eq3::Band::Bass);
-    p.eq_mid_gain    = audio_engine.GetEqGain(Eq3::Band::Mid);
-    p.eq_treble_gain = audio_engine.GetEqGain(Eq3::Band::Treble);
-
-    daisy_seed.StopAudio();
-    __disable_irq();
-    storage.WritePreset(entry, p);
-    __enable_irq();
-    daisy_seed.StartAudio(AudioCallback);
-}
-
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -398,9 +393,11 @@ int main()
     // DIAGNOSTIC: 0=DAISY_SEED(AK4556) 1=DAISY_SEED_1_1(WM8731) 2=SEED_2_DFM
     daisy_seed.PrintLine("Board version: %d", (int)daisy_seed.CheckBoardVersion());
 
+#if NAM_ENABLE_AUDIO_DIAGNOSTICS
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CYCCNT = 0;
     DWT->CTRL  |= DWT_CTRL_CYCCNTENA_Msk;
+#endif
 
     // --- QSPI storage --------------------------------------------------------
     // IR convolution depends on CMSIS RFFT-128. If the FFT tables aren't linked
@@ -493,7 +490,9 @@ int main()
 
     // --- Main loop -----------------------------------------------------------
     uint32_t now = System::GetNow();
+#if NAM_ENABLE_AUDIO_DIAGNOSTICS
     uint32_t last_diag_ms = now;
+#endif
     uint32_t last_perf_refresh_ms = now;
     uint32_t last_tuner_refresh_ms = now;
 
@@ -618,10 +617,8 @@ int main()
 
             if (ev.fs1_hold)
             {
-                SaveActivePreset();
-                preset_dirty = false;
-                PushPerformanceScreen();
-                daisy_seed.PrintLine("Preset %u saved.", (unsigned)presets.Current());
+                daisy_seed.PrintLine("Use desktop/DFU to persist preset %u.",
+                                     (unsigned)presets.Current());
             }
             if (ev.fs2_hold)
             {
@@ -783,7 +780,7 @@ int main()
                 }
             }
 
-            // FS1 tap: apply edits + save to flash.
+            // FS1 tap: apply edits in RAM for this session.
             if (ev.fs1_tap)
             {
                 NamPreset& p = presets.EditablePreset(edit_preset_idx);
@@ -810,19 +807,10 @@ int main()
                 presets.ApplyPreset(p, audio_engine, storage, models,
                                     hw::AUDIO_SAMPLE_RATE, hw::AUDIO_BLOCK_SIZE);
 
-                // Write to QSPI if this preset has a flash entry.
-                const NamDataEntry* entry = presets.Entry(edit_preset_idx);
-                if (entry) {
-                    daisy_seed.StopAudio();
-                    __disable_irq();
-                    storage.WritePreset(entry, p);
-                    __enable_irq();
-                    daisy_seed.StartAudio(AudioCallback);
-                }
-                daisy_seed.PrintLine("Edit saved -> preset %u: %s",
+                daisy_seed.PrintLine("Edit applied in RAM -> preset %u: %s",
                              (unsigned)edit_preset_idx,
                              presets.Name(edit_preset_idx));
-                preset_dirty = false;
+                preset_dirty = true;
                 editing = false;
                 PushPerformanceScreen();
             }
@@ -846,7 +834,8 @@ int main()
         if constexpr (kDisplayEnabled)
             ui.Update();
 
-        // Once-per-second diagnostics.
+        // Once-per-second diagnostics (compiled out of production builds).
+#if NAM_ENABLE_AUDIO_DIAGNOSTICS
         if (now - last_diag_ms >= 1000)
         {
             float cb_ms = static_cast<float>(cb_max_cyc) / 480000.0f;
@@ -871,5 +860,6 @@ int main()
             cb_max_cyc   = 0;
             last_diag_ms = now;
         }
+#endif
     }
 }

@@ -1,5 +1,18 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b2f46ea..163ca60 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,6 +1,8 @@
+ cmake_minimum_required(VERSION 3.10)
+ project(nam-binary-loader VERSION 0.1.0)
+ 
++add_compile_definitions(HOST_BUILD)
++
+ set(CMAKE_CXX_STANDARD 20)
+ set(CMAKE_CXX_STANDARD_REQUIRED OFF)
+ set(CMAKE_CXX_EXTENSIONS OFF)
 diff --git a/namb/get_dsp_namb.cpp b/namb/get_dsp_namb.cpp
-index 8247a83..dce935c 100644
+index 8247a83..85eeac2 100644
 --- a/namb/get_dsp_namb.cpp
 +++ b/namb/get_dsp_namb.cpp
 @@ -3,8 +3,10 @@
@@ -27,7 +40,7 @@ index 8247a83..dce935c 100644
  #include "binary_parser_registry.h"
  #include "namb_format.h"
  
-@@ -147,6 +153,70 @@ nam::ModelMetadata to_model_metadata(const ParsedMetadata& pm)
+@@ -147,6 +153,76 @@ nam::ModelMetadata to_model_metadata(const ParsedMetadata& pm)
    return meta;
  }
  
@@ -59,7 +72,13 @@ index 8247a83..dce935c 100644
 +  const auto& la = wc.layer_array_params[0];
 +  if (la.input_size != 1 || la.condition_size != 1 || la.head_size != 1)
 +    return false;
-+  if (la.channels != la.bottleneck || (la.channels != 3 && la.channels != 8))
++  if (la.channels != la.bottleneck)
++    return false;
++#if defined(NAM_A2_NANO_ONLY)
++  if (la.channels != 3)
++#else
++  if (la.channels != 3 && la.channels != 8)
++#endif
 +    return false;
 +  if (la.head_kernel_size != kHeadKernelSize || !la.head_bias)
 +    return false;
@@ -98,7 +117,16 @@ index 8247a83..dce935c 100644
  // =============================================================================
  // Binary parsing into typed configs
  // =============================================================================
-@@ -331,6 +401,11 @@ std::unique_ptr<nam::ModelConfig> load_wavenet(BinaryReader& r, const float*& we
+@@ -223,6 +299,8 @@ std::unique_ptr<nam::ModelConfig> load_wavenet(BinaryReader& r, const float*& we
+   if (has_condition_dsp)
+   {
+     uint32_t cdsp_weight_count = r.read_u32();
++    if (cdsp_weight_count > weight_count)
++      throw std::runtime_error("NAMB: condition DSP weights exceed model weights");
+ 
+     // Read condition DSP metadata (48 bytes)
+     ParsedMetadata cdsp_pm = read_metadata_block(r);
+@@ -331,6 +409,11 @@ std::unique_ptr<nam::ModelConfig> load_wavenet(BinaryReader& r, const float*& we
        activation_post_film, layer1x1_post_film, head1x1_post_film);
    }
  
@@ -110,7 +138,48 @@ index 8247a83..dce935c 100644
    // head_scale is the last weight value, but set_weights_ will overwrite it.
    // Pass 0.0f; set_weights_ will set the correct value from weights.
    wc->head_scale = 0.0f;
-@@ -429,6 +504,7 @@ std::unique_ptr<nam::DSP> nam::get_dsp_namb(const uint8_t* data, size_t size)
+@@ -369,6 +452,8 @@ std::unique_ptr<nam::ModelConfig> load_model(BinaryReader& r, const float*& weig
+ 
+ std::unique_ptr<nam::DSP> nam::get_dsp_namb(const uint8_t* data, size_t size)
+ {
++  if (!data)
++    throw std::runtime_error("NAMB: null data buffer");
+   if (size < FILE_HEADER_SIZE + METADATA_BLOCK_SIZE)
+     throw std::runtime_error("NAMB: file too small");
+ 
+@@ -388,11 +473,11 @@ std::unique_ptr<nam::DSP> nam::get_dsp_namb(const uint8_t* data, size_t size)
+   uint32_t total_file_size = header_reader.read_u32();
+   uint32_t weights_offset = header_reader.read_u32();
+   uint32_t total_weight_count = header_reader.read_u32();
+-  header_reader.read_u32(); // model_block_size
++  uint32_t model_block_size = header_reader.read_u32();
+   uint32_t stored_checksum = header_reader.read_u32();
+ 
+   // Validate file size
+-  if (size < total_file_size)
++  if (total_file_size < MODEL_BLOCK_OFFSET || size < total_file_size)
+     throw std::runtime_error("NAMB: file truncated (expected " + std::to_string(total_file_size) + " bytes, got "
+                              + std::to_string(size) + ")");
+ 
+@@ -401,9 +486,14 @@ std::unique_ptr<nam::DSP> nam::get_dsp_namb(const uint8_t* data, size_t size)
+   if (computed_checksum != stored_checksum)
+     throw std::runtime_error("NAMB: checksum mismatch");
+ 
+-  // Validate weights section
+-  size_t expected_weights_end = weights_offset + total_weight_count * sizeof(float);
+-  if (expected_weights_end > total_file_size)
++  // Validate model and weights sections before doing pointer arithmetic.
++  if (weights_offset < MODEL_BLOCK_OFFSET || weights_offset > total_file_size)
++    throw std::runtime_error("NAMB: invalid weights offset");
++  if (model_block_size != weights_offset - MODEL_BLOCK_OFFSET)
++    throw std::runtime_error("NAMB: inconsistent model block size");
++  if (reinterpret_cast<uintptr_t>(data + weights_offset) % alignof(float) != 0)
++    throw std::runtime_error("NAMB: weights are not float-aligned");
++  if (total_weight_count > (total_file_size - weights_offset) / sizeof(float))
+     throw std::runtime_error("NAMB: weights extend beyond file");
+ 
+   // Read metadata block (at offset 32)
+@@ -429,6 +519,7 @@ std::unique_ptr<nam::DSP> nam::get_dsp_namb(const uint8_t* data, size_t size)
    return dsp;
  }
  
@@ -118,7 +187,7 @@ index 8247a83..dce935c 100644
  std::unique_ptr<nam::DSP> nam::get_dsp_namb(const std::filesystem::path& filename)
  {
    if (!std::filesystem::exists(filename))
-@@ -448,3 +524,4 @@ std::unique_ptr<nam::DSP> nam::get_dsp_namb(const std::filesystem::path& filenam
+@@ -448,3 +539,4 @@ std::unique_ptr<nam::DSP> nam::get_dsp_namb(const std::filesystem::path& filenam
  
    return get_dsp_namb(data.data(), data.size());
  }
@@ -154,6 +223,159 @@ index 4b033c0..77e325d 100644
  
  /// \brief Load a NAM model from a memory buffer containing .namb data
  /// \param data Pointer to the binary data
+diff --git a/namb/namb_format.h b/namb/namb_format.h
+index f4c791d..8020474 100644
+--- a/namb/namb_format.h
++++ b/namb/namb_format.h
+@@ -158,7 +158,7 @@ public:
+ private:
+   void check(size_t n) const
+   {
+-    if (_pos + n > _size)
++    if (n > _size - _pos)
+       throw std::runtime_error("NAMB: unexpected end of data at offset " + std::to_string(_pos));
+   }
+ 
+diff --git a/test/test_namb.cpp b/test/test_namb.cpp
+index e679092..52ae852 100644
+--- a/test/test_namb.cpp
++++ b/test/test_namb.cpp
+@@ -181,6 +181,110 @@ void test_roundtrip()
+ // Format validation tests
+ // =============================================================================
+ 
++static void set_u32(std::vector<uint8_t>& data, size_t offset, uint32_t value)
++{
++  std::memcpy(data.data() + offset, &value, sizeof(value));
++}
++
++static void refresh_checksum(std::vector<uint8_t>& data)
++{
++  set_u32(data, 24, 0);
++  set_u32(data, 24, nam::namb::compute_file_crc32(data.data(), data.size()));
++}
++
++static std::vector<uint8_t> minimal_namb(size_t size = nam::namb::MODEL_BLOCK_OFFSET)
++{
++  std::vector<uint8_t> data(size, 0);
++  set_u32(data, 0, nam::namb::MAGIC);
++  uint16_t version = nam::namb::FORMAT_VERSION;
++  std::memcpy(data.data() + 4, &version, sizeof(version));
++  set_u32(data, 8, static_cast<uint32_t>(size));
++  set_u32(data, 12, nam::namb::MODEL_BLOCK_OFFSET);
++  data[nam::namb::FILE_HEADER_SIZE + 1] = 7; // supported model config version 0.7.0
++  refresh_checksum(data);
++  return data;
++}
++
++static void expect_layout_error(const std::vector<uint8_t>& data, const char* text)
++{
++  bool threw = false;
++  try
++  {
++    nam::get_dsp_namb(data.data(), data.size());
++  }
++  catch (const std::runtime_error& e)
++  {
++    threw = true;
++    if (std::string(e.what()).find(text) == std::string::npos)
++      std::cerr << "Expected error containing '" << text << "', got '" << e.what() << "'\n";
++    assert(std::string(e.what()).find(text) != std::string::npos);
++  }
++  assert(threw);
++}
++
++void test_null_buffer()
++{
++  bool threw = false;
++  try
++  {
++    nam::get_dsp_namb(nullptr, nam::namb::MODEL_BLOCK_OFFSET);
++  }
++  catch (const std::runtime_error& e)
++  {
++    threw = true;
++    assert(std::string(e.what()).find("null") != std::string::npos);
++  }
++  assert(threw);
++}
++
++void test_weights_before_model_block()
++{
++  auto data = minimal_namb();
++  set_u32(data, 12, nam::namb::MODEL_BLOCK_OFFSET - 1);
++  set_u32(data, 20, 0);
++  refresh_checksum(data);
++  expect_layout_error(data, "offset");
++}
++
++void test_unaligned_weights()
++{
++  auto data = minimal_namb(nam::namb::MODEL_BLOCK_OFFSET + 4);
++  set_u32(data, 12, nam::namb::MODEL_BLOCK_OFFSET + 1);
++  set_u32(data, 20, 1);
++  refresh_checksum(data);
++  expect_layout_error(data, "aligned");
++}
++
++void test_excessive_weight_count()
++{
++  auto data = minimal_namb();
++  set_u32(data, 16, UINT32_MAX);
++  refresh_checksum(data);
++  expect_layout_error(data, "weights");
++}
++
++void test_inconsistent_model_block_size()
++{
++  auto data = minimal_namb(nam::namb::MODEL_BLOCK_OFFSET + 4);
++  set_u32(data, 12, nam::namb::MODEL_BLOCK_OFFSET + 4);
++  set_u32(data, 20, 3);
++  refresh_checksum(data);
++  expect_layout_error(data, "model block");
++}
++
++void test_condition_weights_exceed_model_weights()
++{
++  auto data = minimal_namb(nam::namb::MODEL_BLOCK_OFFSET + 12);
++  set_u32(data, 12, static_cast<uint32_t>(data.size()));
++  set_u32(data, 20, 12);
++  data[nam::namb::MODEL_BLOCK_OFFSET] = nam::namb::ARCH_WAVENET;
++  data[nam::namb::MODEL_BLOCK_OFFSET + 4] = 1; // input channels
++  data[nam::namb::MODEL_BLOCK_OFFSET + 7] = 1; // condition DSP present
++  set_u32(data, nam::namb::MODEL_BLOCK_OFFSET + 8, 1);
++  refresh_checksum(data);
++  expect_layout_error(data, "condition DSP weights");
++}
++
+ void test_bad_magic()
+ {
+   // Create minimal data with wrong magic
+@@ -366,6 +470,24 @@ int main()
+   std::cout << "  test_wrong_version..." << std::endl;
+   test_namb::test_wrong_version();
+ 
++  std::cout << "  test_null_buffer..." << std::endl;
++  test_namb::test_null_buffer();
++
++  std::cout << "  test_weights_before_model_block..." << std::endl;
++  test_namb::test_weights_before_model_block();
++
++  std::cout << "  test_unaligned_weights..." << std::endl;
++  test_namb::test_unaligned_weights();
++
++  std::cout << "  test_excessive_weight_count..." << std::endl;
++  test_namb::test_excessive_weight_count();
++
++  std::cout << "  test_inconsistent_model_block_size..." << std::endl;
++  test_namb::test_inconsistent_model_block_size();
++
++  std::cout << "  test_condition_weights_exceed_model_weights..." << std::endl;
++  test_namb::test_condition_weights_exceed_model_weights();
++
+   std::cout << "  test_bad_checksum..." << std::endl;
+   test_namb::test_bad_checksum();
+ 
 diff --git a/tools/loadmodel.cpp b/tools/loadmodel.cpp
 index c6c28c8..3901760 100644
 --- a/tools/loadmodel.cpp

@@ -57,5 +57,32 @@ int main()
         CHECK(std::fabs(band_gain_db(eq, fs, 12000.0f) - 6.0f) < 1.5f);
         CHECK(std::fabs(band_gain_db(eq, fs, 200.0f)) < 1.0f);
     }
+    // Going flat clears active filter history before it can reappear later.
+    {
+        Eq3 eq; eq.Reset(fs);
+        eq.SetBand(Eq3::Band::Mid, 12.0f, 750.0f);
+        float impulse[2] = {1.0f, 0.0f};
+        eq.Process(impulse, 2);
+        eq.SetBand(Eq3::Band::Mid, 0.0f, 750.0f);
+        float flat = 0.0f;
+        eq.Process(&flat, 1);
+        eq.SetBand(Eq3::Band::Mid, 12.0f, 750.0f);
+        float resumed = 0.0f;
+        eq.Process(&resumed, 1);
+        CHECK(std::fabs(resumed) < 1e-7f);
+    }
+    // A flat-to-active transition cannot resurrect history even when both
+    // control updates happen between audio blocks.
+    {
+        Eq3 eq; eq.Reset(fs);
+        eq.SetBand(Eq3::Band::Mid, 12.0f, 750.0f);
+        float impulse[2] = {1.0f, 0.0f};
+        eq.Process(impulse, 2);
+        eq.SetBand(Eq3::Band::Mid, 0.0f, 750.0f);
+        eq.SetBand(Eq3::Band::Mid, 12.0f, 750.0f);
+        float resumed = 0.0f;
+        eq.Process(&resumed, 1);
+        CHECK(std::fabs(resumed) < 1e-7f);
+    }
     return test_summary("test_eq3");
 }
